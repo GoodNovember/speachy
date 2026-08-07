@@ -173,6 +173,20 @@ tests/data
 .aider*
 speaches_debug
 
+# Node / JavaScript
+# Duplicated in web/.gitignore on purpose. That file only protects the tree it
+# sits in, so a branch without it (or a Node tool added elsewhere in the repo)
+# would leave node_modules stageable. These rules are the safety net.
+node_modules/
+.svelte-kit/
+build-server/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.vite/
+vite.config.*.timestamp-*
+
 # OS-specific
 Thumbs.db
 .DS_Store
