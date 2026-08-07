@@ -1,6 +1,6 @@
 import type { CachedRepoInfo } from '@huggingface/hub';
 import { describe, expect, it } from 'vitest';
-import { KOKORO_VOICES, modelsForCachedRepo } from './model-catalog.ts';
+import { KOKORO_VOICES, modelForRemoteInfo, modelsForCachedRepo } from './model-catalog.ts';
 
 function repo(name: string): CachedRepoInfo {
 	return {
@@ -65,5 +65,30 @@ describe('model catalog classification', () => {
 
 	it('ignores unrelated cached repositories', () => {
 		expect(modelsForCachedRepo(repo('org/unrelated'), { tags: ['text-to-speech'] })).toEqual([]);
+	});
+
+	it('maps remote metadata with the executor-specific response shape', () => {
+		const createdAt = new Date('2025-01-02T03:04:05Z');
+		const whisper = modelForRemoteInfo(
+			{
+				id: 'Systran/faster-whisper-small',
+				createdAt,
+				cardData: { language: ['en', 'fr'] }
+			},
+			'whisper'
+		);
+		expect(whisper).toMatchObject({
+			id: 'Systran/faster-whisper-small',
+			created: 1735787045,
+			owned_by: 'Systran',
+			language: ['en', 'fr'],
+			task: 'automatic-speech-recognition'
+		});
+
+		const malformedPiper = modelForRemoteInfo(
+			{ id: 'org/not-a-piper-name', createdAt, cardData: { language: 'en' } },
+			'piper'
+		);
+		expect(malformedPiper).toBeUndefined();
 	});
 });

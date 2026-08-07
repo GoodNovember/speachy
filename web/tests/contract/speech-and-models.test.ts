@@ -149,6 +149,22 @@ describe.skipIf(!up)('models contract', () => {
 		expect(((await response.json()) as { detail: string }).detail).toContain('not found');
 	});
 
+	it('lists remote registry models filtered by task', async () => {
+		const response = await fetch(api('/v1/registry?task=speaker-embedding'));
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as {
+			data: { id: string; task?: string }[];
+			object: string;
+		};
+		expect(body.object).toBe('list');
+		expect(body.data).toEqual([
+			expect.objectContaining({
+				id: 'pyannote/wespeaker-voxceleb-resnet34-LM',
+				task: 'speaker-embedding'
+			})
+		]);
+	});
+
 	it('lists voices', async () => {
 		const response = await fetch(api('/v1/audio/voices'));
 		const body = (await response.json()) as { voices: { name?: string }[] };

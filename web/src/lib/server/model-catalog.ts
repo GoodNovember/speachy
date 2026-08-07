@@ -5,7 +5,9 @@ import {
 	getCachedModelReposInfo,
 	getModelCardDataFromCachedRepoInfo,
 	HfModelFilter,
-	type ModelCardData
+	listRemoteModels,
+	type ModelCardData,
+	type RemoteModelInfo
 } from './hf.ts';
 
 export type CatalogVoice = Voice & { id: string; name: string };
@@ -106,25 +108,34 @@ const PIPER_SAMPLE_RATES: Record<string, number> = {
 };
 
 function baseModel(repo: CachedRepoInfo, card: ModelCardData, task: ModelTask): CatalogModel {
+	return modelFromMetadata(repo.id.name, repo.lastModifiedAt, card, task);
+}
+
+function modelFromMetadata(
+	id: string,
+	createdAt: Date,
+	card: ModelCardData,
+	task: ModelTask
+): CatalogModel {
 	return {
-		id: repo.id.name,
-		created: Math.trunc(repo.lastModifiedAt.getTime() / 1000),
+		id,
+		created: Math.trunc(createdAt.getTime() / 1000),
 		object: 'model',
-		owned_by: repo.id.name.split('/')[0]!,
+		owned_by: id.split('/')[0]!,
 		language: extractLanguageList(card),
 		task
 	};
 }
 
-function piperModel(repo: CachedRepoInfo, card: ModelCardData): CatalogModel | undefined {
-	const parts = repo.id.name.split('/').at(-1)?.split('-') ?? [];
+function piperModel(id: string, createdAt: Date, card: ModelCardData): CatalogModel | undefined {
+	const parts = id.split('/').at(-1)?.split('-') ?? [];
 	if (parts.length !== 4) return undefined;
 	const [, , name, quality] = parts;
 	const sampleRate = PIPER_SAMPLE_RATES[quality!];
 	const languages = extractLanguageList(card);
 	if (name === undefined || sampleRate === undefined || languages.length !== 1) return undefined;
 	return {
-		...baseModel(repo, card, 'text-to-speech'),
+		...modelFromMetadata(id, createdAt, card, 'text-to-speech'),
 		sample_rate: sampleRate,
 		voices: namedVoices([name], languages[0]!)
 	};
@@ -138,7 +149,7 @@ export function modelsForCachedRepo(repo: CachedRepoInfo, card: ModelCardData): 
 		return [baseModel(repo, card, 'automatic-speech-recognition')];
 	}
 	if (PIPER_FILTER.passesFilter(repo.id.name, card)) {
-		const model = piperModel(repo, card);
+		const model = piperModel(repo.id.name, repo.lastModifiedAt, card);
 		return model === undefined ? [] : [model];
 	}
 	if (KOKORO_FILTER.passesFilter(repo.id.name, card)) {
@@ -157,6 +168,63 @@ export function modelsForCachedRepo(repo: CachedRepoInfo, card: ModelCardData): 
 		return [baseModel(repo, card, 'speaker-diarization')];
 	}
 	return [];
+}
+
+type RemoteCatalogKind = 'whisper' | 'parakeet' | 'piper' | 'kokoro';
+
+export function modelForRemoteInfo(
+	info: RemoteModelInfo,
+	kind: RemoteCatalogKind
+): CatalogModel | undefined {
+	if (kind === 'piper') return piperModel(info.id, info.createdAt, info.cardData);
+	const task =
+		kind === 'whisper' || kind === 'parakeet' ? 'automatic-speech-recognition' : 'text-to-speech';
+	const model = modelFromMetadata(info.id, info.createdAt, info.cardData, task);
+	return kind === 'kokoro' ? { ...model, sample_rate: 24_000, voices: KOKORO_VOICES } : model;
+}
+
+const REMOTE_SOURCES: Array<{
+	kind: RemoteCatalogKind;
+	task: ModelTask;
+	filter: HfModelFilter;
+}> = [
+	{ kind: 'whisper', task: 'automatic-speech-recognition', filter: WHISPER_FILTER },
+	{ kind: 'parakeet', task: 'automatic-speech-recognition', filter: PARAKEET_FILTER },
+	{ kind: 'piper', task: 'text-to-speech', filter: PIPER_FILTER },
+	{ kind: 'kokoro', task: 'text-to-speech', filter: KOKORO_FILTER }
+];
+
+const STATIC_REMOTE_MODELS: CatalogModel[] = [
+	{
+		id: 'pyannote/wespeaker-voxceleb-resnet34-LM',
+		created: 0,
+		object: 'model',
+		owned_by: 'pyannote',
+		language: null,
+		task: 'speaker-embedding'
+	},
+	{
+		id: 'pyannote/speaker-diarization-community-1',
+		created: 0,
+		object: 'model',
+		owned_by: 'pyannote',
+		language: null,
+		task: 'speaker-diarization'
+	}
+];
+
+export async function listRemoteCatalogModelsByTask(task?: ModelTask): Promise<CatalogModel[]> {
+	const models: CatalogModel[] = [];
+	const accessToken = process.env.HF_TOKEN;
+	for (const source of REMOTE_SOURCES) {
+		if (task !== undefined && source.task !== task) continue;
+		for await (const info of listRemoteModels(source.filter, { accessToken })) {
+			const model = modelForRemoteInfo(info, source.kind);
+			if (model !== undefined) models.push(model);
+		}
+	}
+	models.push(...STATIC_REMOTE_MODELS.filter((model) => task === undefined || model.task === task));
+	return models;
 }
 
 export async function listLocalModels(cacheDir?: string): Promise<CatalogModel[]> {
