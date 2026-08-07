@@ -205,12 +205,12 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [ ]  |
 | `POST /v1/audio/diarization`       | `routers/diarization.py`      | [ ]  |
 | `POST /v1/chat/completions`        | `routers/chat.py`             | [ ]  |
-| `GET /v1/models`                   | `routers/models.py`           | [ ]  |
-| `GET /v1/models/{model_id}`        | `routers/models.py`           | [ ]  |
+| `GET /v1/models`                   | `routers/models.py`           | [x]  |
+| `GET /v1/models/{model_id}`        | `routers/models.py`           | [x]  |
 | `POST /v1/models/{model_id}`       | `routers/models.py`           | [ ]  |
 | `DELETE /v1/models/{model_id}`     | `routers/models.py`           | [ ]  |
-| `GET /v1/audio/models`             | `routers/models.py`           | [ ]  |
-| `GET /v1/audio/voices`             | `routers/models.py`           | [ ]  |
+| `GET /v1/audio/models`             | `routers/models.py`           | [x]  |
+| `GET /v1/audio/voices`             | `routers/models.py`           | [x]  |
 | `GET /v1/registry`                 | `routers/models.py`           | [ ]  |
 | `GET /api/ps`                      | `routers/misc.py`             | [ ]  |
 | `POST /api/ps/{model_id}`          | `routers/misc.py`             | [ ]  |
