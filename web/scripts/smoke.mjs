@@ -32,6 +32,8 @@ function skip(name, why) {
 for (const [path, marker] of [
 	['/', 'speachy'],
 	['/stt', 'Speech to text'],
+	['/tts', 'Text to speech'],
+	['/mic', 'Microphone capture'],
 	['/models', 'Registry']
 ]) {
 	const response = await fetch(new URL(path, BASE));
@@ -125,6 +127,29 @@ if (modelsResponse.status === 502) {
 			'proxy streams SSE without buffering into JSON',
 			streamed.headers.get('content-type')?.includes('text/event-stream') === true &&
 				text.includes('transcript.text.delta')
+		);
+	}
+
+	const ttsModel = models.data.find((m) => m.task === 'text-to-speech')?.id;
+	if (ttsModel === undefined) {
+		skip('proxy speech synthesis', 'no text-to-speech model downloaded');
+	} else {
+		const speech = await fetch(new URL('/v1/audio/speech', BASE), {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				model: ttsModel,
+				voice: 'af_heart',
+				input: 'Smoke test.',
+				response_format: 'wav'
+			})
+		});
+		const bytes = new Uint8Array(await speech.arrayBuffer());
+		// wav rather than pcm on purpose: this also proves ffmpeg is usable.
+		check(
+			'proxy speech synthesis returns wav (also proves ffmpeg works)',
+			speech.status === 200 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF',
+			`${(bytes.byteLength / 1024).toFixed(0)} KB`
 		);
 	}
 }

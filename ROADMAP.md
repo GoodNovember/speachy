@@ -101,12 +101,12 @@ Replaces Gradio and the vendored React bundle. Talks to the existing Python serv
 
 Ordered so the uncertain work happens first. The audio capture and the event inspector are both prerequisites for everything below them, and the Gradio deletion is a one-way door held until the end.
 
-- [ ] **Spike browser audio capture first.** `getUserMedia` to PCM16 at the right sample rate means an AudioWorklet and manual resampling. Both Gradio and the prebuilt React console were hiding this, it is shared by the audio chat page and the realtime console, and it is the item most likely to eat a day
+- [x] **Browser audio capture.** `src/lib/audio/` — AudioWorklet capture, native resampling when the browser will open an AudioContext at 16 kHz and a linear-interpolation fallback when it will not, plus PCM16, WAV and base64 conversion. 23 unit tests cover the maths; the microphone itself needs a human, so `/mic` transcribes what it captured to turn the spike into a pass/fail
 - [ ] Hand-write `src/lib/types/realtime.ts` — the client/server event unions. This is the contract everything later depends on; start from the `openai` npm package's realtime types and add the Speachy extensions from `src/speaches/types/realtime.py`
 - [x] Shared API client with API-key handling (localStorage, reusing the Gradio storage key). Normalises FastAPI's error shapes; SSE parser does not wait for a `[DONE]` sentinel
 - [ ] **Raw event inspector**, built early rather than late. It is the debugging tool for the rest of Phase 1 and all of Phase 3, so it pays for itself immediately
 - [x] Speech-to-text page, replacing `ui/tabs/stt.py` — file upload, streaming over SSE, all five response formats, word timestamps, cancellation
-- [ ] Text-to-speech page, replacing `ui/tabs/tts.py` — model and voice pickers, speed, format, audio playback
+- [x] Text-to-speech page, replacing `ui/tabs/tts.py` — model and voice pickers, speed, all six formats, playback and download
 - [x] Model management page — local models, in-memory state, registry browse and filter, download, delete, unload
 - [ ] Audio chat page, replacing `ui/tabs/audio_chat.py` — mic capture, streaming text and audio reply. Needs a chat backend at `chat_completion_base_url` (Ollama by default), which is not yet running here
 - [ ] Realtime console page, replacing `realtime-console/dist` — mic capture, WebSocket session, live transcript, VAD state indicator

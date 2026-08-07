@@ -11,6 +11,8 @@
 	const links = [
 		{ route: '/', label: 'Overview' },
 		{ route: '/stt', label: 'Speech to text' },
+		{ route: '/tts', label: 'Text to speech' },
+		{ route: '/mic', label: 'Microphone' },
 		{ route: '/models', label: 'Models' }
 	] as const;
 

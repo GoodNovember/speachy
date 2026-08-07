@@ -62,9 +62,17 @@
 		<h2>Models</h2>
 		<p>See what is on disk and in memory, browse the registry, download and delete.</p>
 	</a>
-	<div class="card pending">
+	<a class="card link" href={resolve('/tts')}>
 		<h2>Text to speech</h2>
-		<p>Next up, along with the realtime console and its event inspector.</p>
+		<p>Generate audio from text, with every voice, format and speed the server supports.</p>
+	</a>
+	<a class="card link" href={resolve('/mic')}>
+		<h2>Microphone</h2>
+		<p>Capture to PCM16 at 16 kHz, then transcribe it to prove the pipeline end to end.</p>
+	</a>
+	<div class="card pending">
+		<h2>Realtime console</h2>
+		<p>Next up, together with the event inspector and the realtime type definitions.</p>
 	</div>
 </div>
 

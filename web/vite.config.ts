@@ -22,7 +22,10 @@ export default defineConfig({
 			// header, never cookies. A cross-site form POST cannot set that header,
 			// so there is no ambient authority for CSRF to abuse. If cookie or
 			// session auth is ever added, this must be revisited.
-			csrf: { checkOrigin: false }
+			//
+			// The check only runs in production, which is why the dev server was
+			// happy and the built server returned 403.
+			csrf: { trustedOrigins: ['*'] }
 		}),
 		realtimeDev()
 	]

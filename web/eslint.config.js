@@ -27,6 +27,19 @@ export default ts.config(
 		languageOptions: { parserOptions: { parser: ts.parser } }
 	},
 	{
+		// AudioWorkletGlobalScope, not the window or node globals.
+		files: ['**/audio/*-worklet.js'],
+		languageOptions: {
+			globals: {
+				AudioWorkletProcessor: 'readonly',
+				registerProcessor: 'readonly',
+				sampleRate: 'readonly',
+				currentTime: 'readonly',
+				currentFrame: 'readonly'
+			}
+		}
+	},
+	{
 		ignores: ['build/', 'build-server/', '.svelte-kit/', 'node_modules/']
 	}
 );
