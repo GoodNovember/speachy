@@ -37,3 +37,9 @@ Inference always runs inside `src/lib/server/executors/worker-pool.ts`. Native i
 ## Configuration
 
 `src/lib/server/config.ts` reads the same environment variables as the Python server, including pydantic's `WHISPER__COMPUTE_TYPE` nested form and the `UVICORN_HOST` / `UVICORN_PORT` names. Lists accept both the JSON form (`ALLOW_ORIGINS='["*"]'`) and a plain comma-separated list.
+
+## ffmpeg
+
+MP3, Opus, FLAC, and AAC encoding requires an ffmpeg executable. Install ffmpeg through the host operating system or container image and keep it on `PATH`; Linux and macOS therefore use the normal `ffmpeg` command without any platform-specific path. Set `FFMPEG_PATH` when the binary lives elsewhere.
+
+On Windows, `FFMPEG_PATH` and an explicit encoder option still take precedence. If neither is set, the server checks the standard WinGet link before falling back to `PATH`. This avoids an obsolete ffmpeg bundled with another application shadowing the current installation. PCM and WAV do not invoke ffmpeg.

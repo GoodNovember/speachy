@@ -7,6 +7,7 @@ import {
 	pcm16BytesToFloat32,
 	resampleAudioBytes,
 	resampleAudioData,
+	resolveFfmpegPath,
 	streamAudioAsFormattedBytes
 } from './audio.ts';
 
@@ -165,5 +166,48 @@ describe('formatted audio streams', () => {
 		);
 		setTimeout(() => controller.abort(new Error('active cancellation')), 20);
 		await expect(encoded).rejects.toThrow('active cancellation');
+	});
+});
+
+describe('ffmpeg resolution', () => {
+	it('uses an explicit path on every platform', () => {
+		expect(
+			resolveFfmpegPath('/opt/speachy/bin/ffmpeg', {
+				platform: 'linux',
+				environment: { FFMPEG_PATH: '/usr/bin/ffmpeg' }
+			})
+		).toBe('/opt/speachy/bin/ffmpeg');
+	});
+
+	it.each(['linux', 'darwin'] as const)('uses FFMPEG_PATH on %s', (platform) => {
+		expect(
+			resolveFfmpegPath(undefined, {
+				platform,
+				environment: { FFMPEG_PATH: '/custom/ffmpeg' }
+			})
+		).toBe('/custom/ffmpeg');
+	});
+
+	it.each(['linux', 'darwin'] as const)('falls back to PATH lookup on %s', (platform) => {
+		expect(resolveFfmpegPath(undefined, { platform, environment: {} })).toBe('ffmpeg');
+	});
+
+	it('uses the WinGet link on Windows when present', () => {
+		const resolved = resolveFfmpegPath(undefined, {
+			platform: 'win32',
+			environment: { LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local' },
+			pathExists: () => true
+		});
+		expect(resolved).toBe('C:\\Users\\test\\AppData\\Local\\Microsoft\\WinGet\\Links\\ffmpeg.exe');
+	});
+
+	it('falls back to PATH lookup when the WinGet link is absent', () => {
+		expect(
+			resolveFfmpegPath(undefined, {
+				platform: 'win32',
+				environment: { LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local' },
+				pathExists: () => false
+			})
+		).toBe('ffmpeg');
 	});
 });

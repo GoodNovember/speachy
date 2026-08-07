@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { win32 } from 'node:path';
 import type { Audio } from './executors/types.ts';
 
 export type AudioFormat = 'aac' | 'pcm' | 'opus' | 'mp3' | 'flac' | 'wav';
@@ -212,12 +212,30 @@ export type AudioStreamOptions = {
 	ffmpegPath?: string;
 };
 
-export function resolveFfmpegPath(explicitPath?: string): string {
+export type FfmpegResolutionContext = {
+	environment?: Record<string, string | undefined>;
+	platform?: NodeJS.Platform;
+	pathExists?: (path: string) => boolean;
+};
+
+export function resolveFfmpegPath(
+	explicitPath?: string,
+	context: FfmpegResolutionContext = {}
+): string {
+	const environment = context.environment ?? process.env;
+	const platform = context.platform ?? process.platform;
+	const pathExists = context.pathExists ?? existsSync;
 	if (explicitPath !== undefined) return explicitPath;
-	if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
-	if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
-		const wingetLink = join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe');
-		if (existsSync(wingetLink)) return wingetLink;
+	if (environment.FFMPEG_PATH) return environment.FFMPEG_PATH;
+	if (platform === 'win32' && environment.LOCALAPPDATA) {
+		const wingetLink = win32.join(
+			environment.LOCALAPPDATA,
+			'Microsoft',
+			'WinGet',
+			'Links',
+			'ffmpeg.exe'
+		);
+		if (pathExists(wingetLink)) return wingetLink;
 	}
 	return 'ffmpeg';
 }
