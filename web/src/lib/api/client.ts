@@ -15,9 +15,10 @@ import {
 	type SpeechTimestamp,
 	type TranscriptionStreamEvent,
 	type VerboseTranscription,
-	type Voice
+	type Voice,
+	chatCompletionSchema
 } from '$lib/types/api';
-import { errorFromResponse } from './errors';
+import { ApiError, errorFromResponse } from './errors';
 import { parseSseJson } from './sse';
 
 // Same-origin by design: /v1/* is proxied to the reference in Phase 1 and
@@ -41,6 +42,28 @@ export type TranscribeOptions = {
 	hotwords?: string;
 	signal?: AbortSignal;
 };
+
+export type ChatTextPart = { type: 'text'; text: string };
+export type ChatAudioPart = {
+	type: 'input_audio';
+	input_audio: { data: string; format: 'wav' | 'mp3' };
+};
+export type ChatMessage = {
+	role: 'system' | 'user' | 'assistant';
+	content: string | (ChatTextPart | ChatAudioPart)[];
+};
+
+export type ChatOptions = {
+	model: string;
+	messages: ChatMessage[];
+	transcriptionModel: string;
+	// Setting a voice switches the request to audio modalities.
+	voice?: string;
+	speechModel?: string;
+	signal?: AbortSignal;
+};
+
+export type ChatReply = { text: string; audio?: Blob };
 
 export type SynthesizeOptions = {
 	model: string;
@@ -222,6 +245,62 @@ export class SpeachyClient {
 			if (event.type !== 'speech.audio.delta') continue;
 			yield Uint8Array.from(atob(event.audio), (c) => c.charCodeAt(0));
 		}
+	}
+
+	// --- chat ------------------------------------------------------------
+
+	async listChatModels(): Promise<{ models: string[]; baseUrl: string }> {
+		const response = await this.#fetch(this.#url('/internal/chat-models'));
+		const body = (await response.json()) as {
+			models?: string[];
+			baseUrl?: string;
+			detail?: string;
+		};
+		if (!response.ok)
+			throw new ApiError(body.detail ?? 'Chat backend unavailable', response.status);
+		return { models: body.models ?? [], baseUrl: body.baseUrl ?? '' };
+	}
+
+	async chat(options: ChatOptions): Promise<ChatReply> {
+		const wantAudio = options.voice !== undefined;
+		const body: Record<string, unknown> = {
+			model: options.model,
+			messages: options.messages,
+			// The whisper-1 alias resolves to faster-whisper-large-v3, which is
+			// probably not downloaded, so always send an explicit model.
+			transcription_model: options.transcriptionModel,
+			...(wantAudio
+				? {
+						modalities: ['text', 'audio'],
+						audio: { voice: options.voice, format: 'wav' },
+						speech_model: options.speechModel
+					}
+				: {})
+		};
+
+		const response = await this.#request('/v1/chat/completions', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(body),
+			signal: options.signal
+		});
+
+		const parsed = chatCompletionSchema.parse(await response.json());
+		const message = parsed.choices[0]?.message;
+		// With audio modalities the text moves to audio.transcript and content
+		// comes back null, so read both.
+		const text = message?.content ?? message?.audio?.transcript ?? '';
+		const audioData = message?.audio?.data;
+
+		return {
+			text,
+			audio:
+				audioData === undefined || audioData === null
+					? undefined
+					: new Blob([Uint8Array.from(atob(audioData), (c) => c.charCodeAt(0))], {
+							type: 'audio/wav'
+						})
+		};
 	}
 
 	// --- vad -------------------------------------------------------------

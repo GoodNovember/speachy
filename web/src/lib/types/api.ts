@@ -95,3 +95,28 @@ export type ResponseFormat = (typeof RESPONSE_FORMATS)[number];
 // pcm is the only format that does not require ffmpeg on the server.
 export const SPEECH_FORMATS = ['mp3', 'wav', 'pcm', 'flac', 'opus', 'aac'] as const;
 export type SpeechFormat = (typeof SPEECH_FORMATS)[number];
+
+// Only the parts the audio chat page reads. With audio modalities the server
+// returns content: null and moves the text into audio.transcript.
+export const chatCompletionSchema = z.looseObject({
+	id: z.string().optional(),
+	choices: z.array(
+		z.looseObject({
+			message: z
+				.looseObject({
+					role: z.string().optional(),
+					content: z.string().nullable().optional(),
+					audio: z
+						.looseObject({
+							id: z.string().optional(),
+							data: z.string().nullable().optional(),
+							transcript: z.string().nullable().optional()
+						})
+						.nullable()
+						.optional()
+				})
+				.optional()
+		})
+	)
+});
+export type ChatCompletion = z.infer<typeof chatCompletionSchema>;

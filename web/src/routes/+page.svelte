@@ -70,6 +70,10 @@
 		<h2>Microphone</h2>
 		<p>Capture to PCM16 at 16 kHz, then transcribe it to prove the pipeline end to end.</p>
 	</a>
+	<a class="card link" href={resolve('/chat')}>
+		<h2>Audio chat</h2>
+		<p>Speak or type to a local LLM and hear the reply spoken back.</p>
+	</a>
 	<a class="card link" href={resolve('/realtime')}>
 		<h2>Realtime console</h2>
 		<p>Live session over the realtime socket, with an inspector for every event both ways.</p>

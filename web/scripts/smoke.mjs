@@ -34,6 +34,7 @@ for (const [path, marker] of [
 	['/stt', 'Speech to text'],
 	['/tts', 'Text to speech'],
 	['/mic', 'Microphone capture'],
+	['/chat', 'Audio chat'],
 	['/realtime', 'Realtime console'],
 	['/models', 'Registry']
 ]) {
@@ -154,6 +155,20 @@ if (modelsResponse.status === 502) {
 			`${(bytes.byteLength / 1024).toFixed(0)} KB`
 		);
 	}
+}
+
+// --- chat backend --------------------------------------------------------
+
+const chatModels = await fetch(new URL('/internal/chat-models', BASE));
+const chatBody = await chatModels.json();
+if (chatModels.status === 502) {
+	skip('chat backend reachable', chatBody.detail ?? 'no chat backend');
+} else {
+	check(
+		'chat backend reachable',
+		chatModels.status === 200 && Array.isArray(chatBody.models) && chatBody.models.length > 0,
+		`${chatBody.models?.length ?? 0} models at ${chatBody.baseUrl}`
+	);
 }
 
 console.log('');
