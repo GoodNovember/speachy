@@ -34,6 +34,7 @@ for (const [path, marker] of [
 	['/stt', 'Speech to text'],
 	['/tts', 'Text to speech'],
 	['/mic', 'Microphone capture'],
+	['/realtime', 'Realtime console'],
 	['/models', 'Registry']
 ]) {
 	const response = await fetch(new URL(path, BASE));
@@ -47,17 +48,18 @@ const received = [];
 await new Promise((resolve) => {
 	const url = new URL('/v1/realtime', BASE);
 	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-	url.searchParams.set('model', 'smoke');
+	url.searchParams.set('model', 'Systran/faster-whisper-tiny');
+	url.searchParams.set('intent', 'transcription');
 	const socket = new WebSocket(url);
 	const timer = setTimeout(() => {
 		socket.terminate();
 		resolve();
 	}, 8000);
-	socket.on('open', () => socket.send(JSON.stringify({ type: 'session.update' })));
+	socket.on('open', () => {});
 	socket.on('message', (data) => {
 		const event = JSON.parse(data.toString());
 		received.push(event);
-		if (event.type === 'transport.echo') {
+		if (event.type === 'session.created') {
 			clearTimeout(timer);
 			socket.close();
 		}
@@ -73,9 +75,9 @@ await new Promise((resolve) => {
 });
 
 check(
-	'realtime socket round-trips a client event',
-	received.some((e) => e.type === 'transport.ready') &&
-		received.some((e) => e.type === 'transport.echo')
+	'realtime socket proxies through to a real session',
+	received.some((e) => e.type === 'session.created'),
+	received.map((e) => e.type).join(', ') || 'no events'
 );
 
 // --- proxy to the reference ---------------------------------------------

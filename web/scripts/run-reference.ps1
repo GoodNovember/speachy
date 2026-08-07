@@ -24,6 +24,14 @@ $env:WHISPER__COMPUTE_TYPE = 'int8'
 $env:ENABLE_UI = 'false'
 $env:LOG_LEVEL = 'info'
 
+# Without this the realtime session transcribes by calling itself through an
+# in-process ASGITransport, which bypasses the middleware stack the endpoint
+# needs and dies with "fastapi_middleware_astack not found in request scope",
+# reported to the client as a bare APIConnectionError. Setting a loopback URL
+# makes it use real HTTP instead. dependencies.py carries a TODO doubting that
+# code path; it is in fact broken.
+$env:LOOPBACK_HOST_URL = 'http://127.0.0.1:8000'
+
 Write-Host "ffmpeg:  $($ffmpeg.Source)"
 Write-Host "repo:    $repoRoot"
 Write-Host "Serving on http://127.0.0.1:8000 (Ctrl-C to stop)`n"

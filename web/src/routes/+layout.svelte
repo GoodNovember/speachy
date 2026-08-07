@@ -13,6 +13,7 @@
 		{ route: '/stt', label: 'Speech to text' },
 		{ route: '/tts', label: 'Text to speech' },
 		{ route: '/mic', label: 'Microphone' },
+		{ route: '/realtime', label: 'Realtime' },
 		{ route: '/models', label: 'Models' }
 	] as const;
 

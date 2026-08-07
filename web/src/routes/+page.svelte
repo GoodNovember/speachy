@@ -70,10 +70,10 @@
 		<h2>Microphone</h2>
 		<p>Capture to PCM16 at 16 kHz, then transcribe it to prove the pipeline end to end.</p>
 	</a>
-	<div class="card pending">
+	<a class="card link" href={resolve('/realtime')}>
 		<h2>Realtime console</h2>
-		<p>Next up, together with the event inspector and the realtime type definitions.</p>
-	</div>
+		<p>Live session over the realtime socket, with an inspector for every event both ways.</p>
+	</a>
 </div>
 
 <style>
@@ -118,9 +118,5 @@
 	.card :global(p) {
 		margin: 0;
 		font-size: 0.9rem;
-	}
-
-	.pending {
-		opacity: 0.55;
 	}
 </style>
