@@ -139,7 +139,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [ ] RPC-backed executor implementations in TypeScript
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
-- [ ] Port `audio.py` — PCM and WAV in-process, ffmpeg subprocess for mp3, opus, flac, aac
+- [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
 - [ ] Implement the HTTP endpoints (see parity table below)
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
@@ -241,7 +241,7 @@ Reference for where each Python module lands. All TypeScript paths are relative 
 | `api_types.py`                             | `src/lib/types/api.ts`                            | 2        |
 | `ui/app.py`, `ui/tabs/*`                   | `src/routes/(playground)/**/+page.svelte`         | 1        |
 | `realtime-console/dist`                    | `src/routes/realtime/+page.svelte`                | 1        |
-| `audio.py`                                 | `src/lib/server/audio.ts`                         | 2        |
+| `audio.py`                                 | `src/lib/server/audio.ts`                         | 2 done   |
 | `text_utils.py`                            | `src/lib/server/text-utils.ts`                    | 2        |
 | `hf_utils.py`, `model_registry.py`         | `src/lib/server/hf.ts` + `model-registry.ts`      | 2 done   |
 | `routers/*.py`                             | `src/routes/v1/**/+server.ts`                     | 2        |
