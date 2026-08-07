@@ -10,6 +10,7 @@
 		"preview": "npm run build && npm run start",
 		"prepare": "svelte-kit sync || echo ''",
 		"test": "vitest run",
+		"test:contract": "vitest run tests/contract",
 		"test:watch": "vitest",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
@@ -38,6 +39,7 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
+		"openai": "^7.4.0",
 		"ws": "^8.21.3",
 		"zod": "^4.4.3"
 	}

@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 // something concrete to match. Everything written here is observed behaviour,
 // not a reading of the source.
 //
-//   node scripts/capture-reference.mjs http://127.0.0.1:8000
+//   node scripts/capture-reference.mjs http://127.0.0.1:8001
 
-const BASE = process.argv[2] ?? 'http://127.0.0.1:8000';
+const BASE = process.argv[2] ?? 'http://127.0.0.1:8001';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, '..', 'tests', 'fixtures', 'python-reference');
 const AUDIO = join(HERE, '..', '..', 'audio.wav');

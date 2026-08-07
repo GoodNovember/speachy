@@ -30,11 +30,12 @@ $env:LOG_LEVEL = 'info'
 # reported to the client as a bare APIConnectionError. Setting a loopback URL
 # makes it use real HTTP instead. dependencies.py carries a TODO doubting that
 # code path; it is in fact broken.
-$env:LOOPBACK_HOST_URL = 'http://127.0.0.1:8000'
+$env:LOOPBACK_HOST_URL = 'http://127.0.0.1:8001'
 
 Write-Host "ffmpeg:  $($ffmpeg.Source)"
 Write-Host "repo:    $repoRoot"
-Write-Host "Serving on http://127.0.0.1:8000 (Ctrl-C to stop)`n"
+Write-Host "Serving on http://127.0.0.1:8001 (Ctrl-C to stop)`n"
+Write-Host "(8000 is reserved for the SvelteKit server, which replaces this one)`n"
 
 Set-Location $repoRoot
-uv run uvicorn --factory --host 127.0.0.1 --port 8000 speaches.main:create_app
+uv run uvicorn --factory --host 127.0.0.1 --port 8001 speaches.main:create_app

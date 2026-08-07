@@ -6,9 +6,9 @@ import { WebSocket } from 'ws';
 // Records a real realtime session against the Python reference so the event
 // types are written from observed traffic rather than from reading the source.
 //
-//   node scripts/capture-realtime.mjs ws://127.0.0.1:8000
+//   node scripts/capture-realtime.mjs ws://127.0.0.1:8001
 
-const BASE = process.argv[2] ?? 'ws://127.0.0.1:8000';
+const BASE = process.argv[2] ?? 'ws://127.0.0.1:8001';
 const MODEL = 'Systran/faster-whisper-tiny';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, '..', 'tests', 'fixtures', 'python-reference');

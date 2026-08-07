@@ -41,6 +41,7 @@ Locked decisions. Add to this as open questions resolve.
 - **The realtime WebSocket is proxied too, not just HTTP.** `src/lib/server/realtime/socket.ts` pipes `/v1/realtime` to the reference, so the browser still only talks to one origin and the console is written against the socket our own server will host in Phase 3. Frames sent before the upstream handshake completes are queued rather than dropped.
 - **The reference needs `LOOPBACK_HOST_URL` set or realtime transcription silently fails.** Without it the session transcribes by calling itself through an in-process `ASGITransport(stt_router)`, which bypasses the middleware stack the endpoint needs and dies with `AssertionError: fastapi_middleware_astack not found in request scope` — reported to the client as a bare `APIConnectionError` with the item left at `transcript: null`. `dependencies.py` carries a `TODO: verify` on that code path; it does not work. `run-reference.ps1` sets it. Our Phase 3 session will call the transcription code directly and avoid the loopback entirely.
 - **Always send an explicit `transcription_model` to the chat endpoint.** `model_aliases.json` maps the OpenAI default `whisper-1` to `Systran/faster-whisper-large-v3`, which is unlikely to be downloaded, so relying on the default either fails or silently pulls several gigabytes. `tts-1` maps to Kokoro, which is fine.
+- **Our server takes port 8000; the reference moved to 8001.** 8000 is what every existing compose file and doc points at for the OpenAI-compatible API, and our server is the eventual drop-in replacement, so it should inherit that address rather than force a breaking change at the end of Phase 4.
 - **SvelteKit's CSRF protection must stay off.** It rejects cross-site POSTs carrying form content types, which is exactly how `/v1/audio/transcriptions` is called. Every non-browser client — the OpenAI SDK, curl, the ported pytest suite — sends multipart with no matching `Origin` and gets a 403. Safe to disable here only because the API authenticates with an `Authorization` header and never cookies, so there is no ambient authority for CSRF to abuse. **If cookie or session auth is ever added, this must be revisited.** Found in the production build; the dev server did not surface it.
 
 ### Open questions
@@ -125,14 +126,15 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 
 ## Phase 2 — Test suite, then the HTTP surface
 
-- [ ] Port `tests/` to Vitest against the OpenAI SDK, pointed at the Python server. Get green before writing a single handler
-  - [ ] `openai_transcription_test.py`, `api_timestamp_granularities_test.py`, `openai_timestamp_granularities_test.py`
-  - [ ] `speech_test.py`, `sse_test.py`
-  - [ ] `api_model_test.py`, `model_manager_test.py`
+- [x] Port `tests/` to Vitest against the OpenAI SDK, pointed at the Python server. Green before writing a single handler. Lives in `web/tests/contract/`, runs with `npm run test:contract`, and targets whatever `SPEACHY_BASE_URL` points at so the same tests will verify our own server later. 33 tests, self-skipping when no server is listening
+  - [x] `api_timestamp_granularities_test.py` — all five granularity combinations, and words present only when asked for. The two `openai_*` files are **not** ported: they hit the real OpenAI API rather than speaches
+  - [x] `speech_test.py`, `sse_test.py` — wav/mp3/pcm headers, sse framing, srt and vtt parsed structurally with deliberately malformed input to prove the parsers are not vacuous
+  - [x] `api_model_test.py` — list, filter by task, fetch by slashed id, 404 shape, voices, `/api/ps`. `model_manager_test.py` needs in-process config injection and is covered instead by the unit tests for `model-manager.ts`
   - [ ] `api_chat_test.py`
   - [ ] `auth_test.py`
-  - [ ] `vad_test.py`, `speech_embedding_test.py`, `diarization_test.py`
+  - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
   - [ ] `text_utils_test.py` (pure functions — port alongside `text_utils.ts`)
+  - [ ] `auth_test.py` — needs a second reference instance started with an API key, since the suite runs against a live server rather than constructing the app in-process
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
 - [ ] RPC-backed executor implementations in TypeScript
 - [ ] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`

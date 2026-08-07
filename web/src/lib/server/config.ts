@@ -99,7 +99,7 @@ export const configSchema = z.object({
 	// Phase 1 only. The app proxies /v1/* here so the browser talks to one
 	// origin and the UI is written against the paths our own server will serve
 	// in Phase 2. Each proxied route gets replaced by a real handler in place.
-	referenceBaseUrl: z.string().url().default('http://127.0.0.1:8000'),
+	referenceBaseUrl: z.string().url().default('http://127.0.0.1:8001'),
 
 	preloadModels: envStringList.default([]),
 

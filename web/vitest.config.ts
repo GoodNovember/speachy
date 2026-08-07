@@ -12,7 +12,9 @@ export default defineConfig({
 	},
 	test: {
 		environment: 'node',
-		include: ['src/**/*.test.ts'],
+		// Unit tests live beside the code; the contract suite lives in tests/ and
+		// runs against a live server, skipping itself when none is listening.
+		include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
 		testTimeout: 30_000
 	}
 });

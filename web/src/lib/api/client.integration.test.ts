@@ -8,7 +8,7 @@ import { ApiError } from './errors.ts';
 //   pwsh web/scripts/run-reference.ps1
 // and the suite skips itself when it is not listening.
 
-const BASE = process.env.SPEACHY_REFERENCE_URL ?? 'http://127.0.0.1:8000';
+const BASE = process.env.SPEACHY_REFERENCE_URL ?? 'http://127.0.0.1:8001';
 const STT_MODEL = 'Systran/faster-whisper-tiny';
 const TTS_MODEL = 'speaches-ai/Kokoro-82M-v1.0-ONNX';
 

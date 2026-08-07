@@ -16,7 +16,9 @@ Everything below is observed, not inferred from the source. These are the detail
 
 **`transcript.text.done` reports an empty transcript.** The final streaming event is `{"text": "", "type": "transcript.text.done", ...}` — the accumulated text is never populated. A client that relies on the done event rather than concatenating deltas gets nothing. The port should send the full text here; this is worth an upstream issue.
 
-**An invalid TTS speed kills the connection instead of returning 422.** `speech.py` wraps the call in `except ValueError` to convert it into a clean 422, but `handle_speech_request` is a generator, so the `ValueError` is not raised until `StreamingResponse` starts consuming it — after the headers have gone out. The client sees a terminated connection. Any port that validates eagerly, before returning the stream, will behave better than the original here.
+**Invalid TTS parameters kill the connection instead of returning 4xx.** `speech.py` wraps the call in `except ValueError` to convert it into a clean 422, but `handle_speech_request` is a generator, so the `ValueError` is not raised until `StreamingResponse` starts consuming it — after the 200 and its headers have gone out. The client sees a severed connection: HTTP 200, zero-byte body, `curl` exit 18.
+
+This affects **everything** validated inside that generator, not just speed. Both an out-of-range `speed` and an unsupported `voice` behave identically. Any port that validates eagerly, before returning the stream, behaves better than the original — and should, since a 200 followed by silence is the worst possible way to report a bad request.
 
 ## Details worth matching
 
