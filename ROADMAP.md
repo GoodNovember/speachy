@@ -12,11 +12,11 @@ Companion design doc (rationale, architecture, transposition detail): https://cl
 
 Three shapes, same destination at three distances. We build toward **Shape B** and design so that **Shape C** is cheap.
 
-| Shape | Control plane | Inference | Status |
-| --- | --- | --- | --- |
-| A | SvelteKit UI only | Python (unchanged) | Phase 1 |
-| B | SvelteKit (API, realtime, registry, UI) | Python worker behind RPC | Phase 2-3 |
-| C | SvelteKit | `sherpa-onnx` in worker threads | Phase 4 |
+| Shape | Control plane                           | Inference                       | Status    |
+| ----- | --------------------------------------- | ------------------------------- | --------- |
+| A     | SvelteKit UI only                       | Python (unchanged)              | Phase 1   |
+| B     | SvelteKit (API, realtime, registry, UI) | Python worker behind RPC        | Phase 2-3 |
+| C     | SvelteKit                               | `sherpa-onnx` in worker threads | Phase 4   |
 
 The seam that makes B to C cheap is a single executor interface. Fix it in Phase 0 and never let a route file import an executor implementation directly.
 
@@ -33,7 +33,9 @@ Locked decisions. Add to this as open questions resolve.
 - **Inference runs in `worker_threads`, always.** `sherpa-onnx` calls are synchronous native calls that block the event loop. Python gets away with threads because native code releases the GIL; Node has no equivalent escape. This is architectural, not an optimisation — retrofitting it means rewriting every executor signature.
 - **Silero VAD stays in-process.** Turn detection sits in the latency path of every realtime turn and cannot afford an RPC round trip. It runs on `onnxruntime-node` in the main process even during Shape B.
 - **Port the test suite before the implementation.** The 16 pytest files are an executable specification of the API contract, written against the OpenAI SDK. Green against Python first, then flip the base URL.
-- **The OpenAI API contract is the spec.** Where the port and the Python original disagree, the OpenAI API wins. Deviations get documented, not absorbed.
+- **The OpenAI API contract is the spec.** Where the port and the Python original disagree, the OpenAI API wins. Deviations get documented, not absorbed. The observed ones are in [`web/tests/fixtures/python-reference/FINDINGS.md`](web/tests/fixtures/python-reference/FINDINGS.md) — read that before implementing any endpoint, because several contradict what the source reads like.
+- **The reference server runs CPU-only, and that is the target.** `uv sync` installs the CPU builds of torch and onnxruntime on this hardware, so `WHISPER__INFERENCE_DEVICE=cpu` and `WHISPER__COMPUTE_TYPE=int8` are all that is needed. Start it with `pwsh web/scripts/run-reference.ps1`. CUDA is a later concern, gated on better hardware.
+- **ffmpeg is a hard runtime dependency, inherited by the port.** Every audio format except `pcm` is encoded by shelling out to ffmpeg. On this machine a 2013 build shipped with Panda3D sits in the machine-level PATH and shadows the modern one; `run-reference.ps1` prepends the good one per-process rather than editing the user's PATH.
 
 ### Open questions
 
@@ -74,19 +76,38 @@ node scripts/smoke.mjs http://127.0.0.1:8000
 
 ---
 
+## Phase 0.5 — Get the reference running — COMPLETE
+
+The port is validated against the Python server, so it has to actually run. It never had on this machine.
+
+- [x] Install `uv`, let it fetch Python 3.12 (`pyproject.toml` pins `==3.12.*`; the system had 3.13)
+- [x] `uv sync` — CPU builds of torch and onnxruntime, no CUDA handling needed
+- [x] Install a modern ffmpeg; diagnose the Panda3D build shadowing it on the machine PATH
+- [x] Download `Systran/faster-whisper-tiny` and `speaches-ai/Kokoro-82M-v1.0-ONNX`
+- [x] `web/scripts/run-reference.ps1` — one command to start the reference on CPU
+- [x] `web/scripts/capture-reference.mjs` — capture real responses from every endpoint
+- [x] Document the observed behaviour in `web/tests/fixtures/python-reference/FINDINGS.md`
+
+**Found by running it, not by reading it:** no `[DONE]` sentinel on SSE streams; `transcript.text.done` reports an empty transcript; errors use FastAPI's `{"detail": ...}` rather than OpenAI's error envelope; an invalid TTS speed terminates the connection instead of returning 422; streaming WAV carries a `0xFFFFFFFF` placeholder RIFF size. Full detail in FINDINGS.md.
+
+---
+
 ## Phase 1 — Playground, against the Python server
 
 Replaces Gradio and the vendored React bundle. Talks to the existing Python server over its OpenAI-compatible API, so nothing on the backend changes.
 
+Ordered so the uncertain work happens first. The audio capture and the event inspector are both prerequisites for everything below them, and the Gradio deletion is a one-way door held until the end.
+
+- [ ] **Spike browser audio capture first.** `getUserMedia` to PCM16 at the right sample rate means an AudioWorklet and manual resampling. Both Gradio and the prebuilt React console were hiding this, it is shared by the audio chat page and the realtime console, and it is the item most likely to eat a day
 - [ ] Hand-write `src/lib/types/realtime.ts` — the client/server event unions. This is the contract everything later depends on; start from the `openai` npm package's realtime types and add the Speachy extensions from `src/speaches/types/realtime.py`
-- [ ] Shared API client with API-key handling (localStorage, matching current behaviour)
-- [ ] Speech-to-text page, replacing `ui/tabs/stt.py` — file upload, streaming transcription over SSE, all five response formats
+- [ ] Shared API client with API-key handling (localStorage, matching current behaviour). Note the error shapes are FastAPI's, not OpenAI's — see FINDINGS.md
+- [ ] **Raw event inspector**, built early rather than late. It is the debugging tool for the rest of Phase 1 and all of Phase 3, so it pays for itself immediately
+- [ ] Speech-to-text page, replacing `ui/tabs/stt.py` — file upload, streaming transcription over SSE, all five response formats. Do not wait for a `[DONE]` sentinel; the server does not send one
 - [ ] Text-to-speech page, replacing `ui/tabs/tts.py` — model and voice pickers, speed, format, audio playback
-- [ ] Audio chat page, replacing `ui/tabs/audio_chat.py` — mic capture, streaming text and audio reply
-- [ ] Realtime console page, replacing `realtime-console/dist` — mic capture, WebSocket session, live transcript, VAD state indicator
-- [ ] Raw event inspector on the realtime page (both directions, timestamped, filterable). The Python server already keeps every event in `EventPubSub.events`; this is the debugging tool that pays for itself across Phases 2 and 3
 - [ ] Model management page — list local, browse registry, download with progress, delete
-- [ ] Remove `gradio` from `pyproject.toml`, delete `src/speaches/ui/`, delete `realtime-console/`, drop the `StaticFiles` mount and `enable_ui` config from `main.py`
+- [ ] Audio chat page, replacing `ui/tabs/audio_chat.py` — mic capture, streaming text and audio reply. Needs a chat backend at `chat_completion_base_url` (Ollama by default), which is not yet running here
+- [ ] Realtime console page, replacing `realtime-console/dist` — mic capture, WebSocket session, live transcript, VAD state indicator
+- [ ] Remove `gradio` from `pyproject.toml`, delete `src/speaches/ui/`, delete `realtime-console/`, drop the `StaticFiles` mount and `enable_ui` config from `main.py`. **Its own commit** — this deletes the reference UI, so it must stay trivially revertible
 
 **Done when:** the SvelteKit app does everything the Gradio playground did, and the Gradio and React code is gone from the repo.
 
@@ -163,28 +184,28 @@ One executor at a time, easiest and most verifiable first.
 
 Tick when the endpoint is implemented in SvelteKit and its test passes.
 
-| Endpoint | Source | Done |
-| --- | --- | :---: |
-| `POST /v1/audio/transcriptions` | `routers/stt.py` | [ ] |
-| `POST /v1/audio/translations` | `routers/stt.py` | [ ] |
-| `POST /v1/audio/speech` | `routers/speech.py` | [ ] |
-| `POST /v1/audio/speech/timestamps` | `routers/vad.py` | [ ] |
-| `POST /v1/audio/speech/embedding` | `routers/speech_embedding.py` | [ ] |
-| `POST /v1/audio/diarization` | `routers/diarization.py` | [ ] |
-| `POST /v1/chat/completions` | `routers/chat.py` | [ ] |
-| `GET /v1/models` | `routers/models.py` | [ ] |
-| `GET /v1/models/{model_id}` | `routers/models.py` | [ ] |
-| `POST /v1/models/{model_id}` | `routers/models.py` | [ ] |
-| `DELETE /v1/models/{model_id}` | `routers/models.py` | [ ] |
-| `GET /v1/audio/models` | `routers/models.py` | [ ] |
-| `GET /v1/audio/voices` | `routers/models.py` | [ ] |
-| `GET /v1/registry` | `routers/models.py` | [ ] |
-| `GET /api/ps` | `routers/misc.py` | [ ] |
-| `POST /api/ps/{model_id}` | `routers/misc.py` | [ ] |
-| `DELETE /api/ps/{model_id}` | `routers/misc.py` | [ ] |
-| `GET /health` | `routers/misc.py` | [ ] |
-| `WS /v1/realtime` | `routers/realtime_ws.py` | [ ] |
-| `POST /v1/realtime` (WebRTC) | `routers/realtime_rtc.py` | [ ] |
+| Endpoint                           | Source                        | Done |
+| ---------------------------------- | ----------------------------- | :--: |
+| `POST /v1/audio/transcriptions`    | `routers/stt.py`              | [ ]  |
+| `POST /v1/audio/translations`      | `routers/stt.py`              | [ ]  |
+| `POST /v1/audio/speech`            | `routers/speech.py`           | [ ]  |
+| `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [ ]  |
+| `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [ ]  |
+| `POST /v1/audio/diarization`       | `routers/diarization.py`      | [ ]  |
+| `POST /v1/chat/completions`        | `routers/chat.py`             | [ ]  |
+| `GET /v1/models`                   | `routers/models.py`           | [ ]  |
+| `GET /v1/models/{model_id}`        | `routers/models.py`           | [ ]  |
+| `POST /v1/models/{model_id}`       | `routers/models.py`           | [ ]  |
+| `DELETE /v1/models/{model_id}`     | `routers/models.py`           | [ ]  |
+| `GET /v1/audio/models`             | `routers/models.py`           | [ ]  |
+| `GET /v1/audio/voices`             | `routers/models.py`           | [ ]  |
+| `GET /v1/registry`                 | `routers/models.py`           | [ ]  |
+| `GET /api/ps`                      | `routers/misc.py`             | [ ]  |
+| `POST /api/ps/{model_id}`          | `routers/misc.py`             | [ ]  |
+| `DELETE /api/ps/{model_id}`        | `routers/misc.py`             | [ ]  |
+| `GET /health`                      | `routers/misc.py`             | [ ]  |
+| `WS /v1/realtime`                  | `routers/realtime_ws.py`      | [ ]  |
+| `POST /v1/realtime` (WebRTC)       | `routers/realtime_rtc.py`     | [ ]  |
 
 ---
 
@@ -192,43 +213,43 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 
 Reference for where each Python module lands. All TypeScript paths are relative to `web/`.
 
-| Python | TypeScript | Phase |
-| --- | --- | --- |
-| `config.py` | `src/lib/server/config.ts` | 0 done |
-| `logger.py` | `src/lib/server/logger.ts` | 0 done |
-| `main.py` lifespan | `src/lib/server/bootstrap.ts` | 0 done |
-| `main.py` create_app | `src/server-entry.ts` + `vite-plugin-realtime.ts` | 0 done |
-| `dependencies.py` lru_cache singletons | `src/lib/server/runtime.ts` | 0 done |
-| `executors/shared/base_model_manager.py` | `src/lib/server/executors/model-manager.ts` | 0 done |
-| `executors/shared/handler_protocol.py` | `src/lib/server/executors/types.ts` | 0 done |
-| (no counterpart - Node needs it) | `src/lib/server/executors/worker-pool.ts` | 0 done |
-| `dependencies.py` Depends | `src/hooks.server.ts` | 2 |
-| `types/realtime.py` | `src/lib/types/realtime.ts` | 1 |
-| `types/chat.py` | `src/lib/types/chat.ts` | 2 |
-| `api_types.py` | `src/lib/types/api.ts` | 2 |
-| `ui/app.py`, `ui/tabs/*` | `src/routes/(playground)/**/+page.svelte` | 1 |
-| `realtime-console/dist` | `src/routes/realtime/+page.svelte` | 1 |
-| `audio.py` | `src/lib/server/audio.ts` | 2 |
-| `text_utils.py` | `src/lib/server/text-utils.ts` | 2 |
-| `hf_utils.py`, `model_registry.py` | `src/lib/server/hf.ts` | 2 |
-| `routers/*.py` | `src/routes/v1/**/+server.ts` | 2 |
-| `utils.py` | `src/lib/server/errors.ts` | 2 |
-| `realtime/event_router.py` | `src/lib/server/realtime/event-router.ts` | 3 |
-| `realtime/pubsub.py` | `src/lib/server/realtime/pubsub.ts` | 3 |
-| `realtime/context.py` | `src/lib/server/realtime/session-context.ts` | 3 |
-| `realtime/input_audio_buffer.py` | `src/lib/server/realtime/audio-buffer.ts` | 3 |
-| `realtime/session.py` | `src/lib/server/realtime/session.ts` | 3 |
-| `realtime/*_event_router.py` | `src/lib/server/realtime/*-event-router.ts` | 3 |
-| `realtime/message_manager.py` | `src/lib/server/realtime/message-manager.ts` | 3 |
-| `realtime/chat_utils.py` | `src/lib/server/realtime/chat-utils.ts` | 3 |
-| `realtime/rtc/*` | `src/lib/server/realtime/rtc/*` (werift) | 3 |
-| `executors/silero_vad_v5.py` | `src/lib/server/executors/vad.ts` | 3 |
-| `executors/kokoro.py`, `piper.py` | `src/lib/server/executors/{kokoro,piper}.ts` | 4 |
-| `executors/whisper.py`, `parakeet.py` | `src/lib/server/executors/{whisper,parakeet}.ts` | 4 |
-| `executors/wespeaker_speaker_embedding.py` | `src/lib/server/executors/speaker-embedding.ts` | 4 |
-| `executors/pyannote_diarization.py` | `src/lib/server/executors/diarization.ts` | 4 |
-| `tracing.py` | `src/lib/server/tracing.ts` (OTel JS) | deferred |
-| `packages/speaches-cli` | deferred | — |
+| Python                                     | TypeScript                                        | Phase    |
+| ------------------------------------------ | ------------------------------------------------- | -------- |
+| `config.py`                                | `src/lib/server/config.ts`                        | 0 done   |
+| `logger.py`                                | `src/lib/server/logger.ts`                        | 0 done   |
+| `main.py` lifespan                         | `src/lib/server/bootstrap.ts`                     | 0 done   |
+| `main.py` create_app                       | `src/server-entry.ts` + `vite-plugin-realtime.ts` | 0 done   |
+| `dependencies.py` lru_cache singletons     | `src/lib/server/runtime.ts`                       | 0 done   |
+| `executors/shared/base_model_manager.py`   | `src/lib/server/executors/model-manager.ts`       | 0 done   |
+| `executors/shared/handler_protocol.py`     | `src/lib/server/executors/types.ts`               | 0 done   |
+| (no counterpart - Node needs it)           | `src/lib/server/executors/worker-pool.ts`         | 0 done   |
+| `dependencies.py` Depends                  | `src/hooks.server.ts`                             | 2        |
+| `types/realtime.py`                        | `src/lib/types/realtime.ts`                       | 1        |
+| `types/chat.py`                            | `src/lib/types/chat.ts`                           | 2        |
+| `api_types.py`                             | `src/lib/types/api.ts`                            | 2        |
+| `ui/app.py`, `ui/tabs/*`                   | `src/routes/(playground)/**/+page.svelte`         | 1        |
+| `realtime-console/dist`                    | `src/routes/realtime/+page.svelte`                | 1        |
+| `audio.py`                                 | `src/lib/server/audio.ts`                         | 2        |
+| `text_utils.py`                            | `src/lib/server/text-utils.ts`                    | 2        |
+| `hf_utils.py`, `model_registry.py`         | `src/lib/server/hf.ts`                            | 2        |
+| `routers/*.py`                             | `src/routes/v1/**/+server.ts`                     | 2        |
+| `utils.py`                                 | `src/lib/server/errors.ts`                        | 2        |
+| `realtime/event_router.py`                 | `src/lib/server/realtime/event-router.ts`         | 3        |
+| `realtime/pubsub.py`                       | `src/lib/server/realtime/pubsub.ts`               | 3        |
+| `realtime/context.py`                      | `src/lib/server/realtime/session-context.ts`      | 3        |
+| `realtime/input_audio_buffer.py`           | `src/lib/server/realtime/audio-buffer.ts`         | 3        |
+| `realtime/session.py`                      | `src/lib/server/realtime/session.ts`              | 3        |
+| `realtime/*_event_router.py`               | `src/lib/server/realtime/*-event-router.ts`       | 3        |
+| `realtime/message_manager.py`              | `src/lib/server/realtime/message-manager.ts`      | 3        |
+| `realtime/chat_utils.py`                   | `src/lib/server/realtime/chat-utils.ts`           | 3        |
+| `realtime/rtc/*`                           | `src/lib/server/realtime/rtc/*` (werift)          | 3        |
+| `executors/silero_vad_v5.py`               | `src/lib/server/executors/vad.ts`                 | 3        |
+| `executors/kokoro.py`, `piper.py`          | `src/lib/server/executors/{kokoro,piper}.ts`      | 4        |
+| `executors/whisper.py`, `parakeet.py`      | `src/lib/server/executors/{whisper,parakeet}.ts`  | 4        |
+| `executors/wespeaker_speaker_embedding.py` | `src/lib/server/executors/speaker-embedding.ts`   | 4        |
+| `executors/pyannote_diarization.py`        | `src/lib/server/executors/diarization.ts`         | 4        |
+| `tracing.py`                               | `src/lib/server/tracing.ts` (OTel JS)             | deferred |
+| `packages/speaches-cli`                    | deferred                                          | —        |
 
 ---
 
