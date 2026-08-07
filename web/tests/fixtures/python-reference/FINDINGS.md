@@ -12,6 +12,8 @@ Everything below is observed, not inferred from the source. These are the detail
 
 **Model objects carry extra fields.** Alongside the standard `id`, `created`, `object`, `owned_by`, each model includes non-standard `task` and `language` (the latter is a 99-entry array for multilingual Whisper).
 
+**Chat stream timestamps come from the backend.** With the default Ollama backend, `created` can vary between chunks in one response. Speachy preserves those upstream values instead of assigning one response-wide timestamp. A non-streaming text-only reply also serializes `message.audio` as `null` rather than omitting it.
+
 ## Bugs in the reference
 
 **`transcript.text.done` reports an empty transcript.** The final streaming event is `{"text": "", "type": "transcript.text.done", ...}` — the accumulated text is never populated. A client that relies on the done event rather than concatenating deltas gets nothing. The port should send the full text here; this is worth an upstream issue.

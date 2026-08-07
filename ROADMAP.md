@@ -130,7 +130,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] `api_timestamp_granularities_test.py` — all five granularity combinations, and words present only when asked for. The two `openai_*` files are **not** ported: they hit the real OpenAI API rather than speaches
   - [x] `speech_test.py`, `sse_test.py` — wav/mp3/pcm headers, sse framing, srt and vtt parsed structurally with deliberately malformed input to prove the parsers are not vacuous
   - [x] `api_model_test.py` — list, filter by task, fetch by slashed id, 404 shape, voices, `/api/ps`. `model_manager_test.py` needs in-process config injection and is covered instead by the unit tests for `model-manager.ts`
-  - [ ] `api_chat_test.py`
+  - [x] `api_chat_test.py` — text and spoken replies, both non-streaming and streaming; discovers the configured local chat backend model and accepts explicit environment overrides
   - [ ] `auth_test.py`
   - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
   - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
