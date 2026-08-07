@@ -26,7 +26,10 @@ The seam that makes B to C cheap is a single executor interface. Fix it in Phase
 
 Locked decisions. Add to this as open questions resolve.
 
-- **Adapter: community WebSocket adapter over custom server, initially.** SvelteKit has no first-class WebSocket support. Start with `@mdd95/sveltekit-adapter-node` or `adapter-node-ws` so session code stays inside SvelteKit's module graph. Keep all session logic in `src/lib/server/` so that inverting to a Hono/Polka listener later is a change to one entrypoint.
+- **Adapter: official `adapter-node` plus our own listener.** Revised during Phase 0. The plan was to start with a community WebSocket adapter, but `adapter-node-ws` is not published to npm and `@mdd95/sveltekit-adapter-node` is at 1.1.0 — too thin a dependency for the critical path. Instead: official `@sveltejs/adapter-node`, a `src/server-entry.ts` that owns the HTTP listener and mounts SvelteKit's handler as the fallback, and a Vite plugin that attaches the same socket in dev. Only first-party pieces, and no framework-version risk.
+- **Cross-bundle state lives on `globalThis`.** The server entry and SvelteKit's handler are separate bundles, so a module-level singleton would be instantiated twice. `src/lib/server/runtime.ts` keeps the one instance behind `Symbol.for('speachy.runtime')`, which both bundles resolve to. This is what makes the split listener safe.
+- **The web app lives in `web/`, not the repo root.** `src/` is already the Python package, and SvelteKit wants `src/routes` and `src/lib`. The directory gets promoted to the root in Phase 4 when Python goes away.
+- **Zod for runtime validation.** Largest ecosystem, and its discriminated unions map cleanly onto the tagged unions in `types/realtime.py`. Note that `.default()` returns its value unparsed — nested defaults need `.prefault()`.
 - **Inference runs in `worker_threads`, always.** `sherpa-onnx` calls are synchronous native calls that block the event loop. Python gets away with threads because native code releases the GIL; Node has no equivalent escape. This is architectural, not an optimisation — retrofitting it means rewriting every executor signature.
 - **Silero VAD stays in-process.** Turn detection sits in the latency path of every realtime turn and cannot afford an RPC round trip. It runs on `onnxruntime-node` in the main process even during Shape B.
 - **Port the test suite before the implementation.** The 16 pytest files are an executable specification of the API contract, written against the OpenAI SDK. Green against Python first, then flip the base URL.
@@ -36,26 +39,38 @@ Locked decisions. Add to this as open questions resolve.
 
 - [ ] Does ONNX Runtime Whisper hold up against the CTranslate2 INT8 baseline on our hardware? Blocks the Phase 4 Whisper swap. Needs a real benchmark, not a vibe check.
 - [ ] Does diarization stay in Python permanently? `sherpa-onnx` supports it, but Pyannote is the quality reference and this is the least-used endpoint.
-- [ ] Runtime validation library: Zod, Valibot, or ArkType. Matters because `types/realtime.py` is 673 lines of discriminated unions and this choice touches all of it.
 - [ ] Do we keep the WebRTC endpoint at all, or is WebSocket sufficient for the clients we care about? `werift` is the `aiortc` replacement but is materially less battle-tested.
-- [ ] Monorepo layout or a sibling directory? Affects whether Python and TypeScript share the repo root during Phases 2-3.
+- [ ] How does the Python inference worker talk to Node in Phases 2-3 — stdio JSON-RPC, a Unix socket, or a local HTTP server? Streaming TTS chunks and cancellation are the two things that decide it.
 
 ---
 
-## Phase 0 — Scaffolding and seams
+## Phase 0 — Scaffolding and seams — COMPLETE
 
-No behaviour yet. This phase exists to make every later phase mechanical.
+No behaviour yet. This phase exists to make every later phase mechanical. Everything lives in `web/`.
 
-- [ ] Scaffold SvelteKit with Svelte 5 (runes), TypeScript strict mode, Vite
-- [ ] Choose and install the WebSocket-capable node adapter; prove a socket echoes in both `dev` and `build`
-- [ ] Set up Vitest, ESLint, Prettier; wire into `.pre-commit-config.yaml` alongside the existing ruff hooks
-- [ ] Port `src/speaches/config.py` to `src/lib/server/config.ts` — schema-validated env, including a replacement for pydantic's `__` nested-delimiter parsing
-- [ ] Define `src/lib/server/executors/types.ts`: `TranscriptionExecutor`, `SpeechExecutor`, `VadExecutor`, `SpeakerEmbeddingExecutor`, `DiarizationExecutor`. Every method takes an `AbortSignal`
-- [ ] Port the ref-counted TTL model manager from `executors/shared/base_model_manager.py` (drops the `threading.RLock` — Node is single-threaded)
-- [ ] Stand up the worker-thread pool abstraction that executors will run inside
-- [ ] Decide and document the directory layout for coexisting Python and TypeScript
+- [x] Scaffold SvelteKit with Svelte 5 (runes), TypeScript strict mode, Vite
+- [x] Settle the WebSocket story and prove a socket echoes in both `dev` and `build` — `web/src/lib/server/realtime/socket.ts`, attached by `web/vite-plugin-realtime.ts` in dev and `web/src/server-entry.ts` in production
+- [x] Verify the realtime socket coexists with Vite's HMR socket on the same port
+- [x] Set up Vitest, ESLint, Prettier
+- [x] Port `src/speaches/config.py` to `web/src/lib/server/config.ts` — schema-validated env, including a replacement for pydantic's `__` nested-delimiter parsing and the `UVICORN_HOST`/`UVICORN_PORT` names
+- [x] Define `web/src/lib/server/executors/types.ts`: `TranscriptionExecutor`, `SpeechExecutor`, `VadExecutor`, `SpeakerEmbeddingExecutor`, `DiarizationExecutor`. Every method takes an `AbortSignal`
+- [x] Port the ref-counted TTL model manager from `executors/shared/base_model_manager.py` (drops the `threading.RLock` — Node is single-threaded)
+- [x] Stand up the worker-thread pool abstraction that executors will run inside, with cancellation and streaming
+- [x] Decide and document the directory layout for coexisting Python and TypeScript
+- [x] `web/scripts/smoke.mjs` — re-runnable acceptance check for the page and the socket
+- [ ] Wire `npm run lint` and `npm test` into `.pre-commit-config.yaml` alongside the existing ruff hooks
 
 **Done when:** `npm run dev` and `npm run build` both serve a page and hold a WebSocket open, and the executor interface compiles with zero implementations.
+
+**Status:** met. 40 unit tests pass, `svelte-check` and ESLint are clean, and `scripts/smoke.mjs` passes against both the dev server and the built server.
+
+```
+cd web
+npm test                                   # 40 tests
+npm run check && npm run lint              # types and lint
+npm run build && npm start                 # production server on :8000
+node scripts/smoke.mjs http://127.0.0.1:8000
+```
 
 ---
 
@@ -175,41 +190,44 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 
 ## Module map
 
-Reference for where each Python module lands.
+Reference for where each Python module lands. All TypeScript paths are relative to `web/`.
 
 | Python | TypeScript | Phase |
 | --- | --- | --- |
-| `config.py` | `lib/server/config.ts` | 0 |
-| `dependencies.py` | module singletons + `hooks.server.ts` | 0, 2 |
-| `main.py` | server entrypoint + `lib/server/bootstrap.ts` | 0 |
-| `executors/shared/base_model_manager.py` | `lib/server/executors/model-manager.ts` | 0 |
-| `executors/shared/handler_protocol.py` | `lib/server/executors/types.ts` | 0 |
-| `types/realtime.py` | `lib/types/realtime.ts` | 1 |
-| `types/chat.py` | `lib/types/chat.ts` | 2 |
-| `api_types.py` | `lib/types/api.ts` | 2 |
-| `ui/app.py`, `ui/tabs/*` | `routes/(playground)/**/+page.svelte` | 1 |
-| `realtime-console/dist` | `routes/realtime/+page.svelte` | 1 |
-| `audio.py` | `lib/server/audio.ts` | 2 |
-| `text_utils.py` | `lib/server/text-utils.ts` | 2 |
-| `hf_utils.py`, `model_registry.py` | `lib/server/hf.ts` | 2 |
-| `routers/*.py` | `routes/v1/**/+server.ts` | 2 |
-| `utils.py` | `lib/server/errors.ts` | 2 |
-| `realtime/event_router.py` | `lib/server/realtime/event-router.ts` | 3 |
-| `realtime/pubsub.py` | `lib/server/realtime/pubsub.ts` | 3 |
-| `realtime/context.py` | `lib/server/realtime/session-context.ts` | 3 |
-| `realtime/input_audio_buffer.py` | `lib/server/realtime/audio-buffer.ts` | 3 |
-| `realtime/session.py` | `lib/server/realtime/session.ts` | 3 |
-| `realtime/*_event_router.py` | `lib/server/realtime/*-event-router.ts` | 3 |
-| `realtime/message_manager.py` | `lib/server/realtime/message-manager.ts` | 3 |
-| `realtime/chat_utils.py` | `lib/server/realtime/chat-utils.ts` | 3 |
-| `realtime/rtc/*` | `lib/server/realtime/rtc/*` (werift) | 3 |
-| `executors/silero_vad_v5.py` | `lib/server/executors/vad.ts` | 3 |
-| `executors/kokoro.py`, `piper.py` | `lib/server/executors/{kokoro,piper}.ts` | 4 |
-| `executors/whisper.py`, `parakeet.py` | `lib/server/executors/{whisper,parakeet}.ts` | 4 |
-| `executors/wespeaker_speaker_embedding.py` | `lib/server/executors/speaker-embedding.ts` | 4 |
-| `executors/pyannote_diarization.py` | `lib/server/executors/diarization.ts` | 4 |
-| `tracing.py` | `lib/server/tracing.ts` (OTel JS) | deferred |
-| `logger.py` | `lib/server/logger.ts` | 0 |
+| `config.py` | `src/lib/server/config.ts` | 0 done |
+| `logger.py` | `src/lib/server/logger.ts` | 0 done |
+| `main.py` lifespan | `src/lib/server/bootstrap.ts` | 0 done |
+| `main.py` create_app | `src/server-entry.ts` + `vite-plugin-realtime.ts` | 0 done |
+| `dependencies.py` lru_cache singletons | `src/lib/server/runtime.ts` | 0 done |
+| `executors/shared/base_model_manager.py` | `src/lib/server/executors/model-manager.ts` | 0 done |
+| `executors/shared/handler_protocol.py` | `src/lib/server/executors/types.ts` | 0 done |
+| (no counterpart - Node needs it) | `src/lib/server/executors/worker-pool.ts` | 0 done |
+| `dependencies.py` Depends | `src/hooks.server.ts` | 2 |
+| `types/realtime.py` | `src/lib/types/realtime.ts` | 1 |
+| `types/chat.py` | `src/lib/types/chat.ts` | 2 |
+| `api_types.py` | `src/lib/types/api.ts` | 2 |
+| `ui/app.py`, `ui/tabs/*` | `src/routes/(playground)/**/+page.svelte` | 1 |
+| `realtime-console/dist` | `src/routes/realtime/+page.svelte` | 1 |
+| `audio.py` | `src/lib/server/audio.ts` | 2 |
+| `text_utils.py` | `src/lib/server/text-utils.ts` | 2 |
+| `hf_utils.py`, `model_registry.py` | `src/lib/server/hf.ts` | 2 |
+| `routers/*.py` | `src/routes/v1/**/+server.ts` | 2 |
+| `utils.py` | `src/lib/server/errors.ts` | 2 |
+| `realtime/event_router.py` | `src/lib/server/realtime/event-router.ts` | 3 |
+| `realtime/pubsub.py` | `src/lib/server/realtime/pubsub.ts` | 3 |
+| `realtime/context.py` | `src/lib/server/realtime/session-context.ts` | 3 |
+| `realtime/input_audio_buffer.py` | `src/lib/server/realtime/audio-buffer.ts` | 3 |
+| `realtime/session.py` | `src/lib/server/realtime/session.ts` | 3 |
+| `realtime/*_event_router.py` | `src/lib/server/realtime/*-event-router.ts` | 3 |
+| `realtime/message_manager.py` | `src/lib/server/realtime/message-manager.ts` | 3 |
+| `realtime/chat_utils.py` | `src/lib/server/realtime/chat-utils.ts` | 3 |
+| `realtime/rtc/*` | `src/lib/server/realtime/rtc/*` (werift) | 3 |
+| `executors/silero_vad_v5.py` | `src/lib/server/executors/vad.ts` | 3 |
+| `executors/kokoro.py`, `piper.py` | `src/lib/server/executors/{kokoro,piper}.ts` | 4 |
+| `executors/whisper.py`, `parakeet.py` | `src/lib/server/executors/{whisper,parakeet}.ts` | 4 |
+| `executors/wespeaker_speaker_embedding.py` | `src/lib/server/executors/speaker-embedding.ts` | 4 |
+| `executors/pyannote_diarization.py` | `src/lib/server/executors/diarization.ts` | 4 |
+| `tracing.py` | `src/lib/server/tracing.ts` (OTel JS) | deferred |
 | `packages/speaches-cli` | deferred | — |
 
 ---
