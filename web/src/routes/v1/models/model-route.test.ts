@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { _modelDownloadResponse } from './[...modelId]/+server.ts';
+import { ModelRepoNotFoundError } from '$lib/server/hf';
+import { _modelDeleteResponse, _modelDownloadResponse } from './[...modelId]/+server.ts';
 
 describe('POST /v1/models/{model_id}', () => {
 	it('distinguishes a new download from an existing model', async () => {
@@ -33,5 +34,25 @@ describe('POST /v1/models/{model_id}', () => {
 		});
 		expect(response.status).toBe(401);
 		expect(((await response.json()) as { detail: string }).detail).toContain('HF_TOKEN');
+	});
+});
+
+describe('DELETE /v1/models/{model_id}', () => {
+	it('returns the deleted-model detail', async () => {
+		let deleted: string | undefined;
+		const response = await _modelDeleteResponse('org/model', async (modelId) => {
+			deleted = modelId;
+		});
+		expect(response.status).toBe(200);
+		expect(deleted).toBe('org/model');
+		expect(await response.json()).toEqual({ detail: "Model 'org/model' deleted" });
+	});
+
+	it('returns 404 when the repository is not cached', async () => {
+		const response = await _modelDeleteResponse('org/missing', async () => {
+			throw new ModelRepoNotFoundError('org/missing');
+		});
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ detail: 'Model repo not found: org/missing' });
 	});
 });

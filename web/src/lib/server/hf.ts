@@ -196,6 +196,13 @@ export class HuggingFaceCacheNotFoundError extends Error {
 	}
 }
 
+export class ModelRepoNotFoundError extends Error {
+	constructor(readonly modelId: string) {
+		super(`Model repo not found: ${modelId}`);
+		this.name = 'ModelRepoNotFoundError';
+	}
+}
+
 export async function getModelRepoPath(
 	modelId: string,
 	cacheDir = getHFHubCachePath()
@@ -251,7 +258,7 @@ export async function deleteLocalModelRepo(
 	cacheDir = getHFHubCachePath()
 ): Promise<void> {
 	const repoPath = await getModelRepoPath(modelId, cacheDir);
-	if (repoPath === undefined) throw new Error(`Model repo not found: ${modelId}`);
+	if (repoPath === undefined) throw new ModelRepoNotFoundError(modelId);
 	if (dirname(repoPath) !== resolve(cacheDir) || modelIdFromPath(repoPath) !== modelId) {
 		throw new Error(`Refusing to delete an invalid model cache path: ${repoPath}`);
 	}

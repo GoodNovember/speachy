@@ -14,7 +14,8 @@ import {
 	listLocalModelIds,
 	listModelFiles,
 	loadRepoModelCardData,
-	modelIdFromPath
+	modelIdFromPath,
+	ModelRepoNotFoundError
 } from './hf.ts';
 
 const temporaryDirectories: string[] = [];
@@ -156,6 +157,15 @@ describe('local cache operations', () => {
 		await addRepo(cache, 'org/delete-me', 'language: en');
 		await addRepo(cache, 'org/keep-me', 'language: en');
 		await deleteLocalModelRepo('org/delete-me', cache);
+		expect(await listLocalModelIds(cache)).toEqual(['org/keep-me']);
+	});
+
+	it('reports a missing repository without changing the cache', async () => {
+		const cache = await temporaryCache();
+		await addRepo(cache, 'org/keep-me', 'language: en');
+		await expect(deleteLocalModelRepo('org/missing', cache)).rejects.toBeInstanceOf(
+			ModelRepoNotFoundError
+		);
 		expect(await listLocalModelIds(cache)).toEqual(['org/keep-me']);
 	});
 });

@@ -2,6 +2,7 @@ import type { RequestHandler } from './$types';
 import { HubApiError } from '@huggingface/hub';
 import { listLocalModels } from '$lib/server/model-catalog';
 import { downloadSupportedModel, UnsupportedModelError } from '$lib/server/model-download';
+import { deleteLocalModelRepo, ModelRepoNotFoundError } from '$lib/server/hf';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const model = (await listLocalModels()).find((candidate) => candidate.id === params.modelId);
@@ -50,4 +51,29 @@ export async function _modelDownloadResponse(
 
 export const POST: RequestHandler = async ({ params }) => {
 	return _modelDownloadResponse(params.modelId);
+};
+
+export async function _modelDeleteResponse(
+	modelId: string,
+	deleteModel: typeof deleteLocalModelRepo = deleteLocalModelRepo
+): Promise<Response> {
+	try {
+		await deleteModel(modelId);
+		return Response.json({ detail: `Model '${modelId}' deleted` });
+	} catch (error) {
+		if (
+			error instanceof ModelRepoNotFoundError ||
+			(typeof error === 'object' &&
+				error !== null &&
+				'name' in error &&
+				error.name === 'ModelRepoNotFoundError')
+		) {
+			return Response.json({ detail: `Model repo not found: ${modelId}` }, { status: 404 });
+		}
+		throw error;
+	}
+}
+
+export const DELETE: RequestHandler = async ({ params }) => {
+	return _modelDeleteResponse(params.modelId);
 };
