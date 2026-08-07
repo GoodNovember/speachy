@@ -138,7 +138,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
 - [ ] RPC-backed executor implementations in TypeScript
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
-- [ ] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including local cache scanning
+- [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [ ] Port `audio.py` — PCM and WAV in-process, ffmpeg subprocess for mp3, opus, flac, aac
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
 - [ ] Implement the HTTP endpoints (see parity table below)
@@ -243,7 +243,7 @@ Reference for where each Python module lands. All TypeScript paths are relative 
 | `realtime-console/dist`                    | `src/routes/realtime/+page.svelte`                | 1        |
 | `audio.py`                                 | `src/lib/server/audio.ts`                         | 2        |
 | `text_utils.py`                            | `src/lib/server/text-utils.ts`                    | 2        |
-| `hf_utils.py`, `model_registry.py`         | `src/lib/server/hf.ts`                            | 2        |
+| `hf_utils.py`, `model_registry.py`         | `src/lib/server/hf.ts` + `model-registry.ts`      | 2 done   |
 | `routers/*.py`                             | `src/routes/v1/**/+server.ts`                     | 2        |
 | `utils.py`                                 | `src/lib/server/errors.ts`                        | 2 done   |
 | `realtime/event_router.py`                 | `src/lib/server/realtime/event-router.ts`         | 3        |

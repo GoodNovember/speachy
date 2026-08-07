@@ -39,8 +39,10 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
+		"@huggingface/hub": "^2.15.0",
 		"openai": "^7.4.0",
 		"ws": "^8.21.3",
+		"yaml": "^2.9.0",
 		"zod": "^4.4.3"
 	}
 }
