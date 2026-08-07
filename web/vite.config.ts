@@ -11,7 +11,18 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			adapter: adapter(),
+
+			// SvelteKit rejects cross-site POSTs carrying form content types, which
+			// is exactly how /v1/audio/transcriptions is called. Every non-browser
+			// client -- the OpenAI SDK, curl, the ported pytest suite -- sends
+			// multipart with no matching Origin and would get a 403.
+			//
+			// This is safe here because the API authenticates with an Authorization
+			// header, never cookies. A cross-site form POST cannot set that header,
+			// so there is no ambient authority for CSRF to abuse. If cookie or
+			// session auth is ever added, this must be revisited.
+			csrf: { checkOrigin: false }
 		}),
 		realtimeDev()
 	]

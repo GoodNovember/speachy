@@ -1,34 +1,56 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 
-// Phase 0 acceptance check: the page renders and the realtime socket completes
-// a round trip. Point it at either the dev server or the built server.
-//   node scripts/smoke.mjs http://127.0.0.1:8123
+// Acceptance check for the app itself. Point it at the dev server or the built
+// server; both should behave identically.
+//   node scripts/smoke.mjs http://127.0.0.1:5173
+//
+// The /v1 checks require the Python reference to be running behind the proxy
+// and are reported as skipped when it is not.
 
-const base = process.argv[2] ?? 'http://127.0.0.1:5173';
+const BASE = process.argv[2] ?? 'http://127.0.0.1:5173';
+const HERE = dirname(fileURLToPath(import.meta.url));
+const AUDIO = join(HERE, '..', '..', 'audio.wav');
+
 const failures = [];
+let skipped = 0;
 
 function check(name, ok, detail = '') {
 	console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${detail}` : ''}`);
 	if (!ok) failures.push(name);
 }
 
-const response = await fetch(new URL('/', base));
-const body = await response.text();
-check('page responds 200', response.status === 200, `status=${response.status}`);
-check('page is rendered html', body.includes('Phase 0'));
+function skip(name, why) {
+	console.log(`SKIP  ${name}  ${why}`);
+	skipped += 1;
+}
 
-const socketUrl = new URL('/v1/realtime', base);
-socketUrl.protocol = socketUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-socketUrl.searchParams.set('model', 'smoke');
+// --- pages ---------------------------------------------------------------
+
+for (const [path, marker] of [
+	['/', 'speachy'],
+	['/stt', 'Speech to text'],
+	['/models', 'Registry']
+]) {
+	const response = await fetch(new URL(path, BASE));
+	const body = await response.text();
+	check(`page ${path} renders`, response.status === 200 && body.includes(marker));
+}
+
+// --- realtime transport --------------------------------------------------
 
 const received = [];
 await new Promise((resolve) => {
-	const socket = new WebSocket(socketUrl);
+	const url = new URL('/v1/realtime', BASE);
+	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+	url.searchParams.set('model', 'smoke');
+	const socket = new WebSocket(url);
 	const timer = setTimeout(() => {
 		socket.terminate();
 		resolve();
 	}, 8000);
-
 	socket.on('open', () => socket.send(JSON.stringify({ type: 'session.update' })));
 	socket.on('message', (data) => {
 		const event = JSON.parse(data.toString());
@@ -38,8 +60,7 @@ await new Promise((resolve) => {
 			socket.close();
 		}
 	});
-	socket.on('error', (error) => {
-		received.push({ type: 'error', message: error.message });
+	socket.on('error', () => {
 		clearTimeout(timer);
 		resolve();
 	});
@@ -50,18 +71,67 @@ await new Promise((resolve) => {
 });
 
 check(
-	'socket sends transport.ready on connect',
-	received.some((event) => event.type === 'transport.ready')
-);
-check(
-	'socket round-trips a client event',
-	received.some(
-		(event) => event.type === 'transport.echo' && event.echoed_type === 'session.update'
-	)
+	'realtime socket round-trips a client event',
+	received.some((e) => e.type === 'transport.ready') &&
+		received.some((e) => e.type === 'transport.echo')
 );
 
+// --- proxy to the reference ---------------------------------------------
+
+const modelsResponse = await fetch(new URL('/v1/models', BASE));
+if (modelsResponse.status === 502) {
+	skip('proxy /v1/models', 'reference server not running');
+	skip('proxy transcription', 'reference server not running');
+	skip('proxy streaming transcription', 'reference server not running');
+} else {
+	const models = await modelsResponse.json();
+	check(
+		'proxy /v1/models reaches the reference',
+		modelsResponse.status === 200 && Array.isArray(models.data) && models.data.length > 0,
+		`${models.data?.length ?? 0} models`
+	);
+
+	const sttModel = models.data.find((m) => m.task === 'automatic-speech-recognition')?.id;
+	const audioBytes = await readFile(AUDIO);
+
+	if (sttModel === undefined) {
+		skip('proxy transcription', 'no speech-to-text model downloaded');
+		skip('proxy streaming transcription', 'no speech-to-text model downloaded');
+	} else {
+		const form = new FormData();
+		form.set('file', new Blob([audioBytes], { type: 'audio/wav' }), 'audio.wav');
+		form.set('model', sttModel);
+		const transcription = await fetch(new URL('/v1/audio/transcriptions', BASE), {
+			method: 'POST',
+			body: form
+		});
+		const json = await transcription.json();
+		check(
+			'proxy transcription returns text',
+			typeof json.text === 'string' && json.text.length > 0,
+			json.text
+		);
+
+		const streamForm = new FormData();
+		streamForm.set('file', new Blob([audioBytes], { type: 'audio/wav' }), 'audio.wav');
+		streamForm.set('model', sttModel);
+		streamForm.set('stream', 'true');
+		const streamed = await fetch(new URL('/v1/audio/transcriptions', BASE), {
+			method: 'POST',
+			body: streamForm
+		});
+		const text = await streamed.text();
+		check(
+			'proxy streams SSE without buffering into JSON',
+			streamed.headers.get('content-type')?.includes('text/event-stream') === true &&
+				text.includes('transcript.text.delta')
+		);
+	}
+}
+
+console.log('');
 if (failures.length > 0) {
-	console.error(`\n${failures.length} check(s) failed: ${failures.join(', ')}`);
+	console.error(`${failures.length} check(s) failed: ${failures.join(', ')}`);
 	process.exit(1);
 }
-console.log('\nAll smoke checks passed.');
+console.log(`All smoke checks passed${skipped > 0 ? ` (${skipped} skipped)` : ''}.`);

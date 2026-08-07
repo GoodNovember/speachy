@@ -37,6 +37,9 @@ Locked decisions. Add to this as open questions resolve.
 - **The reference server runs CPU-only, and that is the target.** `uv sync` installs the CPU builds of torch and onnxruntime on this hardware, so `WHISPER__INFERENCE_DEVICE=cpu` and `WHISPER__COMPUTE_TYPE=int8` are all that is needed. Start it with `pwsh web/scripts/run-reference.ps1`. CUDA is a later concern, gated on better hardware.
 - **ffmpeg is a hard runtime dependency, inherited by the port.** Every audio format except `pcm` is encoded by shelling out to ffmpeg with `-hide_banner`. A build too old to know that flag fails at stream time, which surfaces as a terminated connection rather than an error response — so it looks like a server bug. This bit us once already: a 2013 ffmpeg bundled with Panda3D sat earlier in the user PATH than the modern one. Fixed by reordering the user PATH; `run-reference.ps1` now checks the flag up front so a regression is obvious rather than mysterious.
 
+- **The UI always talks to same-origin `/v1/*`, never to the reference directly.** The reference sends no CORS headers, and rather than weaken its config with `ALLOW_ORIGINS`, SvelteKit proxies `/v1/*` and `/api/*` to it (`src/lib/server/proxy.ts`). The UI is therefore written against the exact paths our own server will serve, so Phase 2 replaces proxied routes one at a time with no UI changes. The proxy streams bodies through rather than buffering, so SSE and audio still arrive incrementally.
+- **SvelteKit's CSRF protection must stay off.** It rejects cross-site POSTs carrying form content types, which is exactly how `/v1/audio/transcriptions` is called. Every non-browser client — the OpenAI SDK, curl, the ported pytest suite — sends multipart with no matching `Origin` and gets a 403. Safe to disable here only because the API authenticates with an `Authorization` header and never cookies, so there is no ambient authority for CSRF to abuse. **If cookie or session auth is ever added, this must be revisited.** Found in the production build; the dev server did not surface it.
+
 ### Open questions
 
 - [ ] Does ONNX Runtime Whisper hold up against the CTranslate2 INT8 baseline on our hardware? Blocks the Phase 4 Whisper swap. Needs a real benchmark, not a vibe check.
@@ -100,11 +103,11 @@ Ordered so the uncertain work happens first. The audio capture and the event ins
 
 - [ ] **Spike browser audio capture first.** `getUserMedia` to PCM16 at the right sample rate means an AudioWorklet and manual resampling. Both Gradio and the prebuilt React console were hiding this, it is shared by the audio chat page and the realtime console, and it is the item most likely to eat a day
 - [ ] Hand-write `src/lib/types/realtime.ts` — the client/server event unions. This is the contract everything later depends on; start from the `openai` npm package's realtime types and add the Speachy extensions from `src/speaches/types/realtime.py`
-- [ ] Shared API client with API-key handling (localStorage, matching current behaviour). Note the error shapes are FastAPI's, not OpenAI's — see FINDINGS.md
+- [x] Shared API client with API-key handling (localStorage, reusing the Gradio storage key). Normalises FastAPI's error shapes; SSE parser does not wait for a `[DONE]` sentinel
 - [ ] **Raw event inspector**, built early rather than late. It is the debugging tool for the rest of Phase 1 and all of Phase 3, so it pays for itself immediately
-- [ ] Speech-to-text page, replacing `ui/tabs/stt.py` — file upload, streaming transcription over SSE, all five response formats. Do not wait for a `[DONE]` sentinel; the server does not send one
+- [x] Speech-to-text page, replacing `ui/tabs/stt.py` — file upload, streaming over SSE, all five response formats, word timestamps, cancellation
 - [ ] Text-to-speech page, replacing `ui/tabs/tts.py` — model and voice pickers, speed, format, audio playback
-- [ ] Model management page — list local, browse registry, download with progress, delete
+- [x] Model management page — local models, in-memory state, registry browse and filter, download, delete, unload
 - [ ] Audio chat page, replacing `ui/tabs/audio_chat.py` — mic capture, streaming text and audio reply. Needs a chat backend at `chat_completion_base_url` (Ollama by default), which is not yet running here
 - [ ] Realtime console page, replacing `realtime-console/dist` — mic capture, WebSocket session, live transcript, VAD state indicator
 - [ ] Remove `gradio` from `pyproject.toml`, delete `src/speaches/ui/`, delete `realtime-console/`, drop the `StaticFiles` mount and `enable_ui` config from `main.py`. **Its own commit** — this deletes the reference UI, so it must stay trivially revertible

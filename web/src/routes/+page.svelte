@@ -1,205 +1,118 @@
 <script lang="ts">
-	type Status = 'idle' | 'connecting' | 'open' | 'closed' | 'error';
+	import { resolve } from '$app/paths';
+	import { api } from '$lib/api';
 
-	let status = $state<Status>('idle');
-	let log = $state<string[]>([]);
-	let socket: WebSocket | undefined;
+	type Status = 'checking' | 'up' | 'down';
 
-	const label: Record<Status, string> = {
-		idle: 'Not connected',
-		connecting: 'Connecting',
-		open: 'Connected',
-		closed: 'Closed',
-		error: 'Failed'
-	};
+	let status = $state<Status>('checking');
+	let detail = $state('');
+	let modelCount = $state(0);
+	let loadedCount = $state(0);
 
-	function append(line: string): void {
-		log = [...log, `${new Date().toLocaleTimeString()}  ${line}`].slice(-12);
-	}
+	$effect(() => {
+		void check();
+	});
 
-	function connect(): void {
-		socket?.close();
-		status = 'connecting';
-		log = [];
-
-		const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const query = new URLSearchParams({ model: 'phase-0-transport-check' });
-		const url = `${scheme}//${window.location.host}/v1/realtime?${query}`;
-
-		socket = new WebSocket(url);
-		socket.addEventListener('open', () => {
-			status = 'open';
-			append('socket open');
-			socket?.send(JSON.stringify({ type: 'session.update' }));
-		});
-		socket.addEventListener('message', (event) => append(`recv ${event.data}`));
-		socket.addEventListener('error', () => {
-			status = 'error';
-			append('socket error');
-		});
-		socket.addEventListener('close', (event) => {
-			if (status !== 'error') status = 'closed';
-			append(`socket closed (${event.code})`);
-		});
-	}
-
-	function disconnect(): void {
-		socket?.close();
-		socket = undefined;
+	async function check(): Promise<void> {
+		status = 'checking';
+		try {
+			const [models, loaded] = await Promise.all([api().listModels(), api().listLoadedModels()]);
+			modelCount = models.length;
+			loadedCount = loaded.length;
+			status = 'up';
+			detail = '';
+		} catch (err) {
+			status = 'down';
+			detail = err instanceof Error ? err.message : String(err);
+		}
 	}
 </script>
 
-<svelte:head><title>Speachy - Phase 0</title></svelte:head>
+<svelte:head><title>speachy</title></svelte:head>
 
-<main>
-	<header>
-		<p class="eyebrow">Speachy on SvelteKit</p>
-		<h1>Phase 0: scaffolding and seams</h1>
-		<p class="lede">
-			No speech features yet. This phase exists to prove the transport works in both dev and
-			production, and to fix the interfaces every later phase depends on. See
-			<code>ROADMAP.md</code> for what comes next.
-		</p>
-	</header>
+<h1>speachy</h1>
+<p>
+	The SvelteKit port. During Phase 1 this app proxies <code>/v1/*</code> to the Python reference
+	server, so the pages are written against the same paths our own server will serve later. See
+	<code>ROADMAP.md</code> for where this is going.
+</p>
 
-	<section>
-		<h2>Realtime transport check</h2>
-		<p>
-			The realtime socket is attached by a Vite plugin in dev and by <code>src/server-entry.ts</code
-			>
-			in production. Both paths run the same code, so this button proves the same thing either way.
-		</p>
-
-		<div class="controls">
-			<button onclick={connect} disabled={status === 'connecting' || status === 'open'}>
-				Connect
-			</button>
-			<button onclick={disconnect} disabled={status !== 'open'}>Disconnect</button>
-			<span class="status" data-status={status}>{label[status]}</span>
-		</div>
-
-		{#if log.length > 0}
-			<ol class="log">
-				{#each log as line, index (index)}
-					<li>{line}</li>
-				{/each}
-			</ol>
+<section class="card status" data-status={status}>
+	<div>
+		<h2>Reference server</h2>
+		{#if status === 'checking'}
+			<p class="muted">Checking...</p>
+		{:else if status === 'up'}
+			<p class="muted">
+				Connected. {modelCount} model{modelCount === 1 ? '' : 's'} on disk, {loadedCount} in memory.
+			</p>
+		{:else}
+			<p class="error">{detail}</p>
 		{/if}
-	</section>
-</main>
+	</div>
+	<button class="secondary" onclick={check}>Recheck</button>
+</section>
+
+<div class="cards">
+	<a class="card link" href={resolve('/stt')}>
+		<h2>Speech to text</h2>
+		<p>Transcribe a file, with streaming, word timestamps and every response format.</p>
+	</a>
+	<a class="card link" href={resolve('/models')}>
+		<h2>Models</h2>
+		<p>See what is on disk and in memory, browse the registry, download and delete.</p>
+	</a>
+	<div class="card pending">
+		<h2>Text to speech</h2>
+		<p>Next up, along with the realtime console and its event inspector.</p>
+	</div>
+</div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		background: #0e1417;
-		color: #e6edf0;
-		font-family: 'Segoe UI', system-ui, sans-serif;
-		line-height: 1.6;
-	}
-
-	main {
-		max-width: 44rem;
-		margin: 0 auto;
-		padding: 4rem 1.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 2.5rem;
-	}
-
-	.eyebrow {
-		margin: 0 0 0.5rem;
-		font-family: ui-monospace, 'Cascadia Code', monospace;
-		font-size: 0.72rem;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: #4fbcc6;
-	}
-
-	h1 {
-		margin: 0 0 0.75rem;
-		font-size: 2rem;
-		line-height: 1.15;
-	}
-
-	h2 {
-		margin: 0 0 0.5rem;
-		font-size: 1.1rem;
-	}
-
-	.lede,
-	section p {
-		margin: 0 0 1rem;
-		color: #a3b2ba;
-	}
-
-	code {
-		font-family: ui-monospace, 'Cascadia Code', monospace;
-		font-size: 0.86em;
-		background: #1d272c;
-		padding: 0.1em 0.35em;
-		border-radius: 3px;
-	}
-
-	.controls {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	button {
-		font: inherit;
-		font-size: 0.9rem;
-		padding: 0.45rem 1rem;
-		border: 1px solid #4fbcc6;
-		border-radius: 3px;
-		background: transparent;
-		color: #4fbcc6;
-		cursor: pointer;
-	}
-
-	button:hover:not(:disabled) {
-		background: #123338;
-	}
-
-	button:disabled {
-		border-color: #26333a;
-		color: #71838c;
-		cursor: not-allowed;
-	}
-
-	button:focus-visible {
-		outline: 2px solid #6fd0d9;
-		outline-offset: 2px;
-	}
-
 	.status {
-		font-family: ui-monospace, 'Cascadia Code', monospace;
-		font-size: 0.8rem;
-		color: #71838c;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		border-left: 3px solid var(--ink-3);
+		margin-bottom: 1.5rem;
 	}
 
-	.status[data-status='open'] {
-		color: #4fbcc6;
+	.status[data-status='up'] {
+		border-left-color: var(--accent);
+	}
+	.status[data-status='down'] {
+		border-left-color: var(--danger);
+	}
+	.status h2 {
+		margin-bottom: 0.2rem;
+	}
+	.status :global(p) {
+		margin: 0;
 	}
 
-	.status[data-status='error'] {
-		color: #e08a6c;
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+		gap: 1rem;
 	}
 
-	.log {
-		margin: 1.25rem 0 0;
-		padding: 0.85rem 1rem 0.85rem 2.5rem;
-		background: #151d21;
-		border: 1px solid #26333a;
-		border-radius: 4px;
-		font-family: ui-monospace, 'Cascadia Code', monospace;
-		font-size: 0.76rem;
-		color: #a3b2ba;
-		overflow-x: auto;
+	.link {
+		text-decoration: none;
+		color: inherit;
+		display: block;
 	}
 
-	.log li {
-		white-space: pre;
+	.link:hover {
+		border-color: var(--accent);
+	}
+
+	.card :global(p) {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+
+	.pending {
+		opacity: 0.55;
 	}
 </style>
