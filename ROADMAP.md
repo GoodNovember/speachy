@@ -131,13 +131,13 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] `speech_test.py`, `sse_test.py` — wav/mp3/pcm headers, sse framing, srt and vtt parsed structurally with deliberately malformed input to prove the parsers are not vacuous
   - [x] `api_model_test.py` — list, filter by task, fetch by slashed id, 404 shape, voices, `/api/ps`. `model_manager_test.py` needs in-process config injection and is covered instead by the unit tests for `model-manager.ts`
   - [x] `api_chat_test.py` — text and spoken replies, both non-streaming and streaming; discovers the configured local chat backend model and accepts explicit environment overrides
-  - [ ] `auth_test.py`
+  - [x] `auth_test.py` — ported as focused handle tests with injected enabled/disabled auth configuration
   - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
   - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
-  - [ ] `auth_test.py` — needs a second reference instance started with an API key, since the suite runs against a live server rather than constructing the app in-process
+  - [x] `auth_test.py` — the SvelteKit handle factory accepts injected configuration, so enabled and disabled auth are covered without managing a second live process
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
 - [ ] RPC-backed executor implementations in TypeScript
-- [ ] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
+- [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [ ] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including local cache scanning
 - [ ] Port `audio.py` — PCM and WAV in-process, ffmpeg subprocess for mp3, opus, flac, aac
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
@@ -215,7 +215,7 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `GET /api/ps`                      | `routers/misc.py`             | [ ]  |
 | `POST /api/ps/{model_id}`          | `routers/misc.py`             | [ ]  |
 | `DELETE /api/ps/{model_id}`        | `routers/misc.py`             | [ ]  |
-| `GET /health`                      | `routers/misc.py`             | [ ]  |
+| `GET /health`                      | `routers/misc.py`             | [x]  |
 | `WS /v1/realtime`                  | `routers/realtime_ws.py`      | [ ]  |
 | `POST /v1/realtime` (WebRTC)       | `routers/realtime_rtc.py`     | [ ]  |
 
@@ -245,7 +245,7 @@ Reference for where each Python module lands. All TypeScript paths are relative 
 | `text_utils.py`                            | `src/lib/server/text-utils.ts`                    | 2        |
 | `hf_utils.py`, `model_registry.py`         | `src/lib/server/hf.ts`                            | 2        |
 | `routers/*.py`                             | `src/routes/v1/**/+server.ts`                     | 2        |
-| `utils.py`                                 | `src/lib/server/errors.ts`                        | 2        |
+| `utils.py`                                 | `src/lib/server/errors.ts`                        | 2 done   |
 | `realtime/event_router.py`                 | `src/lib/server/realtime/event-router.ts`         | 3        |
 | `realtime/pubsub.py`                       | `src/lib/server/realtime/pubsub.ts`               | 3        |
 | `realtime/context.py`                      | `src/lib/server/realtime/session-context.ts`      | 3        |
