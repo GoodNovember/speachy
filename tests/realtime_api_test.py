@@ -28,7 +28,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=SecretStr("test-api-key"),
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -46,7 +45,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=SecretStr("test-api-key"),
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -63,7 +61,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=SecretStr("test-api-key"),
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -80,7 +77,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=None,  # No API key configured
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -100,7 +96,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=SecretStr("correct-key"),
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -120,7 +115,6 @@ class TestRealtimeWebSocketAuthentication:
         config = Config(
             api_key=SecretStr("required-key"),
             whisper=WhisperConfig(),
-            enable_ui=False,
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )
@@ -203,11 +197,9 @@ class TestRealtimeWebSocketEndpoint:
 
         from speaches.config import Config, WhisperConfig
 
-        # Create config without UI to avoid gradio dependency
         config = Config(
             api_key=None,
             whisper=WhisperConfig(),
-            enable_ui=False,  # Disable UI to avoid gradio import
             chat_completion_base_url="https://api.openai.com/v1",
             chat_completion_api_key=SecretStr("test-key"),
         )

@@ -14,7 +14,7 @@ MODEL_ID = "Systran/faster-whisper-tiny.en"
 @pytest.mark.asyncio
 async def test_model_unloaded_after_ttl(aclient_factory: AclientFactory) -> None:
     ttl = 5
-    config = Config(stt_model_ttl=ttl, enable_ui=False)
+    config = Config(stt_model_ttl=ttl)
     async with aclient_factory(config) as aclient:
         res = (await aclient.get("/api/ps")).json()
         assert len(res["models"]) == 0
@@ -31,7 +31,7 @@ async def test_model_unloaded_after_ttl(aclient_factory: AclientFactory) -> None
 @pytest.mark.asyncio
 async def test_ttl_resets_after_usage(aclient_factory: AclientFactory) -> None:
     ttl = 5
-    config = Config(stt_model_ttl=ttl, enable_ui=False, vad_model_ttl=0)
+    config = Config(stt_model_ttl=ttl, vad_model_ttl=0)
     async with aclient_factory(config) as aclient:
         await aclient.post(f"/api/ps/{MODEL_ID}")
         res = (await aclient.get("/api/ps")).json()
@@ -75,7 +75,7 @@ async def test_ttl_resets_after_usage(aclient_factory: AclientFactory) -> None:
 @pytest.mark.asyncio
 async def test_model_cant_be_unloaded_when_used(aclient_factory: AclientFactory) -> None:
     ttl = 0
-    config = Config(stt_model_ttl=ttl, enable_ui=False, vad_model_ttl=ttl)
+    config = Config(stt_model_ttl=ttl, vad_model_ttl=ttl)
     async with aclient_factory(config) as aclient:
         async with await anyio.open_file("audio.wav", "rb") as f:
             data = await f.read()
@@ -107,7 +107,7 @@ async def test_model_cant_be_unloaded_when_used(aclient_factory: AclientFactory)
 @pytest.mark.asyncio
 async def test_model_cant_be_loaded_twice(aclient_factory: AclientFactory) -> None:
     ttl = -1
-    config = Config(stt_model_ttl=ttl, enable_ui=False, vad_model_ttl=0)
+    config = Config(stt_model_ttl=ttl, vad_model_ttl=0)
     async with aclient_factory(config) as aclient:
         res = await aclient.post(f"/api/ps/{MODEL_ID}")
         assert res.status_code == 201
@@ -122,7 +122,7 @@ async def test_model_cant_be_loaded_twice(aclient_factory: AclientFactory) -> No
 @pytest.mark.asyncio
 async def test_model_is_unloaded_after_request_when_ttl_is_zero(aclient_factory: AclientFactory) -> None:
     ttl = 0
-    config = Config(stt_model_ttl=ttl, enable_ui=False, vad_model_ttl=ttl)
+    config = Config(stt_model_ttl=ttl, vad_model_ttl=ttl)
     async with aclient_factory(config) as aclient:
         async with await anyio.open_file("audio.wav", "rb") as f:
             data = await f.read()

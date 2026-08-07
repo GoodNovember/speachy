@@ -98,7 +98,7 @@ The port is validated against the Python server, so it has to actually run. It n
 
 ---
 
-## Phase 1 — Playground, against the Python server
+## Phase 1 — Playground, against the Python server — COMPLETE
 
 Replaces Gradio and the vendored React bundle. Talks to the existing Python server over its OpenAI-compatible API, so nothing on the backend changes.
 
@@ -113,9 +113,13 @@ Ordered so the uncertain work happens first. The audio capture and the event ins
 - [x] Model management page — local models, in-memory state, registry browse and filter, download, delete, unload
 - [x] Audio chat page, replacing `ui/tabs/audio_chat.py` — speak or type, spoken reply, model and voice pickers. Chat models are listed by our own `/internal/chat-models` route rather than by the browser reaching the LLM backend directly. Streaming replies are not implemented yet; the request is non-streaming
 - [x] Realtime console page, replacing `realtime-console/dist` — mic capture streamed as PCM16, live transcript, speech/silence indicator, event inspector
-- [ ] Remove `gradio` from `pyproject.toml`, delete `src/speaches/ui/`, delete `realtime-console/`, drop the `StaticFiles` mount and `enable_ui` config from `main.py`. **Its own commit** — this deletes the reference UI, so it must stay trivially revertible
+- [x] Removed `gradio` from `pyproject.toml`, deleted `src/speaches/ui/` and `realtime-console/`, dropped the `StaticFiles` mount and the `enable_ui` config. `uv sync` dropped gradio plus nine transitive dependencies; the reference server still starts and every smoke check still passes
 
 **Done when:** the SvelteKit app does everything the Gradio playground did, and the Gradio and React code is gone from the repo.
+
+**Status:** met, and then some. The playground had three tabs; the app has seven pages, adding a microphone capture check, a realtime console with an event inspector, and model management. `GET /` on the reference now returns 404, which is correct: the UI no longer lives there.
+
+Not carried over: streaming replies on the audio chat page. The request is non-streaming, so the reply appears all at once. Worth doing when the response event router lands in Phase 3.
 
 ---
 

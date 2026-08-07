@@ -76,7 +76,6 @@ class Config(BaseSettings):
     - /health (health check endpoint)
     - /docs (API documentation)
     - /openapi.json (OpenAPI schema)
-    - Web UI (Gradio interface)
     """
     log_level: str = "debug"
     """
@@ -90,11 +89,6 @@ class Config(BaseSettings):
     Usage:
         `export ALLOW_ORIGINS='["http://localhost:3000", "http://localhost:3001"]'`
         `export ALLOW_ORIGINS='["*"]'`
-    """
-
-    enable_ui: bool = True
-    """
-    Whether to enable the Gradio UI. You may want to disable this if you want to minimize the dependencies and slightly improve the startup time.
     """
 
     whisper: WhisperConfig = WhisperConfig()
@@ -113,8 +107,9 @@ class Config(BaseSettings):
 
     loopback_host_url: str | None = None
     """
-    If set this is the URL that the gradio app will use to connect to the API server hosting speaches.
-    If not set the gradio app will use the url that the user connects to the gradio app on.
+    Base URL the server uses to call its own HTTP API, which the realtime session needs in order to
+    transcribe. Leaving this unset makes it call itself in-process, which does not work: the request
+    bypasses the middleware stack and fails with `fastapi_middleware_astack not found in request scope`.
     """
 
     # TODO: document the below configuration options

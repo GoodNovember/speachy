@@ -16,7 +16,7 @@
   "appendCount": 22,
   "sent": [
     {
-      "atMs": 32,
+      "atMs": 27,
       "direction": "client",
       "event": {
         "type": "session.update",
@@ -29,7 +29,7 @@
       }
     },
     {
-      "atMs": 1400,
+      "atMs": 1403,
       "direction": "client",
       "event": {
         "type": "input_audio_buffer.commit"
@@ -38,13 +38,13 @@
   ],
   "received": [
     {
-      "atMs": 32,
+      "atMs": 27,
       "direction": "server",
       "event": {
         "type": "session.created",
-        "event_id": "event_GQScSjTIKRYTxebk3REUL",
+        "event_id": "event_5zfbzvMiRDHIYkTztAgK6",
         "session": {
-          "id": "sess_RZMXjeIhyADbq4Jg0UHYx",
+          "id": "sess_y99YREfYSE6AQiWtibtUR",
           "input_audio_format": "pcm16",
           "input_audio_transcription": {
             "model": "Systran/faster-whisper-tiny",
@@ -74,13 +74,13 @@
       }
     },
     {
-      "atMs": 34,
+      "atMs": 30,
       "direction": "server",
       "event": {
         "type": "session.updated",
-        "event_id": "event_Q3xp5aKmKD6RAxWQm5aW7",
+        "event_id": "event_BqKFGdXr8yyc05DatIC0D",
         "session": {
-          "id": "sess_RZMXjeIhyADbq4Jg0UHYx",
+          "id": "sess_y99YREfYSE6AQiWtibtUR",
           "input_audio_format": "pcm16",
           "input_audio_transcription": {
             "model": "Systran/faster-whisper-tiny",
@@ -110,45 +110,23 @@
       }
     },
     {
-      "atMs": 1401,
-      "direction": "server",
-      "event": {
-        "type": "input_audio_buffer.committed",
-        "event_id": "event_zKDPKfXUVWbiSRkZ7kd2E",
-        "item_id": "item_OFvAcR42y2zdmAUunKbYQ",
-        "previous_item_id": null
-      }
-    },
-    {
-      "atMs": 1403,
-      "direction": "server",
-      "event": {
-        "type": "conversation.item.added",
-        "event_id": "event_fkHeZRdNFgoSwb855wrhZ",
-        "item": {
-          "id": "item_OFvAcR42y2zdmAUunKbYQ",
-          "object": "realtime.item",
-          "status": "completed",
-          "type": "message",
-          "role": "user",
-          "content": [
-            {
-              "type": "input_audio",
-              "transcript": null
-            }
-          ]
-        },
-        "previous_item_id": null
-      }
-    },
-    {
       "atMs": 1404,
       "direction": "server",
       "event": {
-        "type": "conversation.item.done",
-        "event_id": "event_pIAcDOL6gPLUNsXea5W9v",
+        "type": "input_audio_buffer.committed",
+        "event_id": "event_gREhxWGI0y0UXJk3t5Syb",
+        "item_id": "item_vfB7NAtHnNZi7mIGcgrjo",
+        "previous_item_id": null
+      }
+    },
+    {
+      "atMs": 1407,
+      "direction": "server",
+      "event": {
+        "type": "conversation.item.added",
+        "event_id": "event_SvHFVoKkJ8K429v0QklRe",
         "item": {
-          "id": "item_OFvAcR42y2zdmAUunKbYQ",
+          "id": "item_vfB7NAtHnNZi7mIGcgrjo",
           "object": "realtime.item",
           "status": "completed",
           "type": "message",
@@ -164,12 +142,34 @@
       }
     },
     {
-      "atMs": 1957,
+      "atMs": 1408,
+      "direction": "server",
+      "event": {
+        "type": "conversation.item.done",
+        "event_id": "event_r4ASdGvVV0tibJlHffHTh",
+        "item": {
+          "id": "item_vfB7NAtHnNZi7mIGcgrjo",
+          "object": "realtime.item",
+          "status": "completed",
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_audio",
+              "transcript": null
+            }
+          ]
+        },
+        "previous_item_id": null
+      }
+    },
+    {
+      "atMs": 2054,
       "direction": "server",
       "event": {
         "content_index": 0,
-        "event_id": "event_fhqOZuugnXa3PC7IjBMmD",
-        "item_id": "item_OFvAcR42y2zdmAUunKbYQ",
+        "event_id": "event_YKtCkMyFqhCbQMbXICkUe",
+        "item_id": "item_vfB7NAtHnNZi7mIGcgrjo",
         "transcript": "Hello, world.",
         "type": "conversation.item.input_audio_transcription.completed",
         "usage": {

@@ -24,7 +24,6 @@ dependencies = [
     "httpx>=0.28.1",
     "onnx-asr>=0.7.0",
     "openai[realtime]>=2.7.1",
-    "gradio>=5.49.1",
     "httpx-sse>=0.4.1",
     "pyannote-audio>=4.0.3",
     "opentelemetry-distro>=0.61b0",

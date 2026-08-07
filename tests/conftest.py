@@ -33,7 +33,6 @@ DEFAULT_CONFIG = Config(
     tts_model_ttl=DEFAULT_TTS_TTL,
     vad_model_ttl=DEFAULT_VAD_TTL,
     # disable the UI as it slightly increases the app startup time due to the imports it's doing
-    enable_ui=False,
     chat_completion_base_url="https://api.openai.com/v1",
     chat_completion_api_key=SecretStr(api_key),
     loopback_host_url=None,

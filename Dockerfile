@@ -3,7 +3,7 @@ ARG BASE_IMAGE=nvidia/cuda:12.6.3-base-ubuntu24.04
 FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/speaches-ai/speaches"
 LABEL org.opencontainers.image.licenses="MIT"
-# `ffmpeg` is installed because without it `gradio` won't work with mp3(possible others as well) files
+# `ffmpeg` is installed because /v1/audio/speech shells out to it for every response format except pcm
 # hadolint ignore=DL3008
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \

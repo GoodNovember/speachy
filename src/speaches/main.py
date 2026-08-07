@@ -17,9 +17,7 @@ from fastapi.exception_handlers import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import RedirectResponse
 
 from speaches.dependencies import ApiKeyDependency, get_config, get_executor_registry
 from speaches.logger import setup_logger
@@ -175,10 +173,6 @@ def create_app() -> FastAPI:
     # WebSocket router WITHOUT authentication (handles its own)
     app.include_router(realtime_ws_router)
 
-    # HACK: move this elsewhere
-    app.get("/v1/realtime", include_in_schema=False)(lambda: RedirectResponse(url="/v1/realtime/"))
-    app.mount("/v1/realtime", StaticFiles(directory="realtime-console/dist", html=True))
-
     if config.allow_origins is not None:
         app.add_middleware(
             CORSMiddleware,
@@ -187,19 +181,5 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-
-    if config.enable_ui:
-        import gradio as gr
-
-        from speaches.ui.app import create_gradio_demo
-
-        app = gr.mount_gradio_app(app, create_gradio_demo(config), path="")
-
-        logger = logging.getLogger("speaches.main")
-        if config.host and config.port:
-            display_host = "localhost" if config.host in ("0.0.0.0", "127.0.0.1") else config.host
-            url = f"http://{display_host}:{config.port}/"
-            logger.info(f"\n\nTo view the gradio web ui of speaches open your browser and visit:\n\n{url}\n\n")
-        # If host or port is missing, do not print a possibly incorrect URL.
 
     return app
