@@ -170,7 +170,18 @@ export function modelsForCachedRepo(repo: CachedRepoInfo, card: ModelCardData): 
 	return [];
 }
 
-type RemoteCatalogKind = 'whisper' | 'parakeet' | 'piper' | 'kokoro';
+export type RemoteCatalogKind = 'whisper' | 'parakeet' | 'piper' | 'kokoro';
+
+export function remoteCatalogKindForMetadata(
+	modelId: string,
+	card: ModelCardData
+): RemoteCatalogKind | undefined {
+	if (WHISPER_FILTER.passesFilter(modelId, card)) return 'whisper';
+	if (PARAKEET_FILTER.passesFilter(modelId, card)) return 'parakeet';
+	if (PIPER_FILTER.passesFilter(modelId, card)) return 'piper';
+	if (KOKORO_FILTER.passesFilter(modelId, card)) return 'kokoro';
+	return undefined;
+}
 
 export function modelForRemoteInfo(
 	info: RemoteModelInfo,
