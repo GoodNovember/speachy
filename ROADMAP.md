@@ -67,7 +67,7 @@ No behaviour yet. This phase exists to make every later phase mechanical. Everyt
 - [x] Stand up the worker-thread pool abstraction that executors will run inside, with cancellation and streaming
 - [x] Decide and document the directory layout for coexisting Python and TypeScript
 - [x] `web/scripts/smoke.mjs` — re-runnable acceptance check for the page and the socket
-- [ ] Wire `npm run lint` and `npm test` into `.pre-commit-config.yaml` alongside the existing ruff hooks
+- [x] Wire `npm run lint` and `npm test` into `.pre-commit-config.yaml` alongside the existing ruff hooks
 
 **Done when:** `npm run dev` and `npm run build` both serve a page and hold a WebSocket open, and the executor interface compiles with zero implementations.
 
@@ -133,14 +133,14 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [ ] `api_chat_test.py`
   - [ ] `auth_test.py`
   - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
-  - [ ] `text_utils_test.py` (pure functions — port alongside `text_utils.ts`)
+  - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
   - [ ] `auth_test.py` — needs a second reference instance started with an API key, since the suite runs against a live server rather than constructing the app in-process
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
 - [ ] RPC-backed executor implementations in TypeScript
 - [ ] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [ ] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including local cache scanning
 - [ ] Port `audio.py` — PCM and WAV in-process, ffmpeg subprocess for mp3, opus, flac, aac
-- [ ] Port `text_utils.py` — `SentenceChunker`, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
+- [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
 - [ ] Implement the HTTP endpoints (see parity table below)
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
