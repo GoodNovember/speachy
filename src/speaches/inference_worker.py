@@ -66,7 +66,7 @@ class InferenceWorkerService:
         # thread. Preserve a fast ping/list-loaded path, but initialize the
         # shared registry before dispatching the first model operation to the
         # executor thread.
-        if method in {"load_model", "transcribe", "transcribe_stream", "translate"}:
+        if method in {"load_model", "synthesize", "transcribe", "transcribe_stream", "translate"}:
             _ = self.registry
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
@@ -75,6 +75,7 @@ class InferenceWorkerService:
             "list_loaded": self._list_loaded,
             "load_model": self._load_model,
             "unload_model": self._unload_model,
+            "synthesize": self._synthesize,
             "transcribe": self._transcribe,
             "transcribe_stream": self._transcribe_stream,
             "translate": self._translate,
@@ -250,6 +251,32 @@ class InferenceWorkerService:
         context.raise_if_cancelled()
         return {"event_count": event_count}
 
+    def _synthesize(self, params: JsonObject, context: RequestContext) -> JsonObject:
+        from pydantic import ValidationError
+
+        from speaches.executors.shared.handler_protocol import SpeechRequest
+
+        model_id = _required_string(params, "model")
+        try:
+            request = SpeechRequest(
+                model=model_id,
+                voice=_required_string(params, "voice"),
+                text=_required_string(params, "text"),
+                speed=_required_number(params, "speed"),
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise RpcMethodError("invalid_params", f"Invalid speech request: {error}") from error
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.text_to_speech), context)
+        context.raise_if_cancelled()
+        event_count = 0
+        for audio in executor.model_manager.handle_speech_request(request):
+            context.raise_if_cancelled()
+            context.emit({"type": "speech.audio.delta", "audio": _encode_audio(audio)})
+            event_count += 1
+        context.raise_if_cancelled()
+        return {"event_count": event_count}
+
     @staticmethod
     def _find_local_executor(model_id: str, executors: tuple[Any, ...], context: RequestContext) -> Any:
         for executor in executors:
@@ -351,6 +378,22 @@ def _decode_audio(value: JsonObject) -> Any:
     if not np.isfinite(samples).all():
         raise RpcMethodError("invalid_params", "Decoded audio samples must all be finite")
     return Audio(samples, sample_rate=sample_rate, name=name)
+
+
+def _encode_audio(audio: Any) -> JsonObject:
+    import numpy as np
+
+    samples = np.asarray(audio.data, dtype=np.float32)
+    sample_rate = audio.sample_rate
+    if samples.ndim != 1 or not np.isfinite(samples).all():
+        raise RpcMethodError("invalid_worker_response", "Synthesized audio must contain finite mono samples")
+    if not isinstance(sample_rate, int) or isinstance(sample_rate, bool) or sample_rate <= 0:
+        raise RpcMethodError("invalid_worker_response", "Synthesized audio sample rate must be positive")
+    return {
+        "encoding": "f32le-base64",
+        "data": base64.b64encode(samples.astype("<f4", copy=False).tobytes()).decode(),
+        "sample_rate": sample_rate,
+    }
 
 
 def _serialize_transcription(response: Any) -> JsonObject:

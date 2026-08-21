@@ -38,6 +38,7 @@ class FakeModelManager:
         self.last_transcription_request: Any | None = None
         self.last_translation_request: Any | None = None
         self.last_streaming_transcription_request: Any | None = None
+        self.last_speech_request: Any | None = None
 
     def load_model(self, model_id: str) -> FakeLease:
         return FakeLease(self, model_id)
@@ -60,6 +61,11 @@ class FakeModelManager:
         self.last_streaming_transcription_request = request
         yield FakeEvent({"type": "transcript.text.delta", "delta": "fixture transcript"})
         yield FakeEvent({"type": "transcript.text.done", "text": ""})
+
+    def handle_speech_request(self, request: Any):  # noqa: ANN201
+        self.last_speech_request = request
+        yield SimpleNamespace(data=np.array([-0.5, 0.5], dtype=np.float32), sample_rate=24000)
+        yield SimpleNamespace(data=np.array([0.25], dtype=np.float32), sample_rate=24000)
 
 
 class FakeEvent:
@@ -102,6 +108,10 @@ class FakeExecutorRegistry:
     @property
     def translation(self):  # noqa: ANN201
         return (self.whisper,)
+
+    @property
+    def text_to_speech(self):  # noqa: ANN201
+        return (self.kokoro,)
 
 
 def context() -> RequestContext:
@@ -263,6 +273,32 @@ def test_streaming_transcription_checks_cancellation_between_events() -> None:
         service.call("transcribe_stream", transcription_params(), RequestContext(cancelled, emit))
     assert caught.value.code == "request_cancelled"
     assert events == [{"type": "transcript.text.delta", "delta": "fixture transcript"}]
+
+
+def test_speech_synthesis_emits_canonical_audio_chunks() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+    events: list[dict[str, Any]] = []
+
+    assert service.call(
+        "synthesize",
+        {"model": "org/kokoro", "voice": "af_heart", "text": "Hello", "speed": 1},
+        RequestContext(threading.Event(), events.append),
+    ) == {"event_count": 2}
+    assert [event["type"] for event in events] == ["speech.audio.delta", "speech.audio.delta"]
+    first_audio = events[0]["audio"]
+    assert first_audio["encoding"] == "f32le-base64"
+    assert first_audio["sample_rate"] == 24000
+    np.testing.assert_array_equal(
+        np.frombuffer(base64.b64decode(first_audio["data"]), dtype="<f4"),
+        np.array([-0.5, 0.5], dtype=np.float32),
+    )
+    request = registry.kokoro.model_manager.last_speech_request
+    assert request is not None
+    assert request.model == "org/kokoro"
+    assert request.voice == "af_heart"
+    assert request.text == "Hello"
+    assert request.speed == 1
 
 
 @pytest.mark.parametrize(

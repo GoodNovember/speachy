@@ -138,15 +138,18 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
   - [x] Buffered NDJSON transport and lifecycle methods: `ping`, `list_loaded`, `load_model`, `unload_model`; includes request IDs, structured errors, ordered events, cooperative cancellation, and a TypeScript lifecycle client
   - [x] Lazy shared worker lifecycle in the SvelteKit runtime, including protocol handshake, dev/production shutdown, and native `GET`/`POST`/`DELETE /api/ps` routes
-  - [ ] Executor methods: transcription/translation, speech streaming, VAD, speaker embedding, and diarization
+  - [ ] Executor methods: transcription/translation, speech streaming, speaker embedding, and diarization
     - [x] Non-streaming transcription with canonical little-endian Float32 audio, semantic JSON results, and lazy main-thread native-runtime initialization
     - [x] Non-streaming translation with Whisper-only executor selection and the shared semantic response codec
     - [x] Streaming transcription with ordered delta/done events, cooperative cancellation, terminal event-count validation, and accumulated terminal text
-    - [ ] Speech streaming, VAD, speaker embedding, and diarization
+    - [x] Speech streaming with canonical Float32 audio events, terminal event-count validation, model-specific voice discovery, and consumer-driven cancellation
+    - [x] VAD intentionally remains outside the worker; the in-process `onnxruntime-node` implementation is tracked in Phase 3
+    - [ ] Speaker embedding and diarization
 - [ ] RPC-backed executor implementations in TypeScript
   - [x] Non-streaming Python transcription and translation adapter with request encoding, response validation, cancellation forwarding, and local-model catalog support
   - [x] Complete the Python transcription interface with validated streaming events and consumer-driven cancellation
-  - [ ] Add the remaining executor adapters
+  - [x] Python speech adapter with validated Float32 chunks, local-model voice lookup, and consumer-driven cancellation
+  - [ ] Add the speaker embedding and diarization adapters
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac
