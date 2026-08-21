@@ -43,13 +43,13 @@ Locked decisions. Add to this as open questions resolve.
 - **Always send an explicit `transcription_model` to the chat endpoint.** `model_aliases.json` maps the OpenAI default `whisper-1` to `Systran/faster-whisper-large-v3`, which is unlikely to be downloaded, so relying on the default either fails or silently pulls several gigabytes. `tts-1` maps to Kokoro, which is fine.
 - **Our server takes port 8000; the reference moved to 8001.** 8000 is what every existing compose file and doc points at for the OpenAI-compatible API, and our server is the eventual drop-in replacement, so it should inherit that address rather than force a breaking change at the end of Phase 4.
 - **SvelteKit's CSRF protection must stay off.** It rejects cross-site POSTs carrying form content types, which is exactly how `/v1/audio/transcriptions` is called. Every non-browser client — the OpenAI SDK, curl, the ported pytest suite — sends multipart with no matching `Origin` and gets a 403. Safe to disable here only because the API authenticates with an `Authorization` header and never cookies, so there is no ambient authority for CSRF to abuse. **If cookie or session auth is ever added, this must be revisited.** Found in the production build; the dev server did not surface it.
+- **The Shape B Python worker uses buffered NDJSON over stdio.** It is a local child process, so a separate HTTP server adds ports, authentication, firewall behaviour, and deployment surface without buying isolation. Protocol v1 has request IDs, terminal results, structured errors, ordered streaming events, and explicit cooperative-cancellation messages. `src/speaches/inference_worker.py` owns the Python side; `web/src/lib/server/executors/python-worker.ts` owns process lifecycle and framing in Node.
 
 ### Open questions
 
 - [ ] Does ONNX Runtime Whisper hold up against the CTranslate2 INT8 baseline on our hardware? Blocks the Phase 4 Whisper swap. Needs a real benchmark, not a vibe check.
 - [ ] Does diarization stay in Python permanently? `sherpa-onnx` supports it, but Pyannote is the quality reference and this is the least-used endpoint.
 - [ ] Do we keep the WebRTC endpoint at all, or is WebSocket sufficient for the clients we care about? `werift` is the `aiortc` replacement but is materially less battle-tested.
-- [ ] How does the Python inference worker talk to Node in Phases 2-3 — stdio JSON-RPC, a Unix socket, or a local HTTP server? Streaming TTS chunks and cancellation are the two things that decide it.
 
 ---
 
@@ -136,6 +136,8 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
   - [x] `auth_test.py` — the SvelteKit handle factory accepts injected configuration, so enabled and disabled auth are covered without managing a second live process
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
+  - [x] Buffered NDJSON transport and lifecycle methods: `ping`, `list_loaded`, `load_model`, `unload_model`; includes request IDs, structured errors, ordered events, cooperative cancellation, and a TypeScript lifecycle client
+  - [ ] Executor methods: transcription/translation, speech streaming, VAD, speaker embedding, and diarization
 - [ ] RPC-backed executor implementations in TypeScript
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
