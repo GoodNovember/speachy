@@ -70,7 +70,7 @@ function readMonoPcm16Wav(path: string): { data: Float32Array; sampleRate: numbe
 }
 
 describe.runIf(RUN_INTEGRATION)('Python transcription integration', () => {
-	it('transcribes the checked-in WAV through the TypeScript adapter and real cached model', async () => {
+	it('transcribes and translates the checked-in WAV through the adapter and real cached model', async () => {
 		const worker = new PythonWorkerClient({
 			command: PYTHON,
 			args: ['-m', 'speaches.inference_worker'],
@@ -107,6 +107,25 @@ describe.runIf(RUN_INTEGRATION)('Python transcription integration', () => {
 				AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
 			);
 			expect(result.text.trim().length).toBeGreaterThan(0);
+
+			const translation = await executor.translate(
+				{
+					audio: { ...audio, name: 'audio' },
+					model: MODEL_ID,
+					responseFormat: 'json',
+					temperature: 0,
+					speechSegments: [{ start: 0, end: audio.data.length }],
+					vadOptions: {
+						threshold: 0.5,
+						minSpeechDurationMs: 0,
+						maxSpeechDurationS: 30,
+						minSilenceDurationMs: 160,
+						speechPadMs: 400
+					}
+				},
+				AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
+			);
+			expect(translation.text.trim().length).toBeGreaterThan(0);
 		} finally {
 			await worker.close();
 		}

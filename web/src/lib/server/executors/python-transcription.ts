@@ -12,6 +12,7 @@ import type {
 	Transcription,
 	TranscriptionExecutor,
 	TranscriptionRequest,
+	TranslationRequest,
 	VadOptions
 } from './types.ts';
 
@@ -28,10 +29,7 @@ type TranscriptionCatalog = {
 	listRemote(): Promise<CatalogModel[]>;
 };
 
-export type NonStreamingTranscriptionExecutor = Omit<
-	TranscriptionExecutor,
-	'transcribeStream' | 'translate'
->;
+export type NonStreamingTranscriptionExecutor = Omit<TranscriptionExecutor, 'transcribeStream'>;
 
 const catalog: TranscriptionCatalog = {
 	listLocal: () => listLocalModelsByTask('automatic-speech-recognition'),
@@ -97,6 +95,18 @@ export function encodeTranscriptionRequest(request: TranscriptionRequest): Recor
 	};
 }
 
+export function encodeTranslationRequest(request: TranslationRequest): Record<string, unknown> {
+	return {
+		audio: encodeRpcAudio(request.audio),
+		model: request.model,
+		prompt: request.prompt ?? null,
+		response_format: request.responseFormat,
+		temperature: request.temperature,
+		speech_segments: request.speechSegments,
+		vad_options: encodeVadOptions(request.vadOptions)
+	};
+}
+
 function parseTranscription(value: unknown): Transcription {
 	const parsed = verboseTranscriptionSchema.parse(value);
 	return {
@@ -136,6 +146,13 @@ export class PythonTranscriptionExecutor implements NonStreamingTranscriptionExe
 
 	async transcribe(request: TranscriptionRequest, signal: AbortSignal): Promise<Transcription> {
 		const response = await this.#worker.request('transcribe', encodeTranscriptionRequest(request), {
+			signal
+		});
+		return parseTranscription(response);
+	}
+
+	async translate(request: TranslationRequest, signal: AbortSignal): Promise<Transcription> {
+		const response = await this.#worker.request('translate', encodeTranslationRequest(request), {
 			signal
 		});
 		return parseTranscription(response);

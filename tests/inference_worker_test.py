@@ -36,6 +36,7 @@ class FakeModelManager:
     def __init__(self) -> None:
         self.loaded_models: dict[str, Any] = {}
         self.last_transcription_request: Any | None = None
+        self.last_translation_request: Any | None = None
 
     def load_model(self, model_id: str) -> FakeLease:
         return FakeLease(self, model_id)
@@ -49,6 +50,10 @@ class FakeModelManager:
     def handle_non_streaming_transcription_request(self, request: Any) -> tuple[str, str]:
         self.last_transcription_request = request
         return "fixture transcript", "text/plain"
+
+    def handle_translation_request(self, request: Any) -> tuple[str, str]:
+        self.last_translation_request = request
+        return "fixture translation", "text/plain"
 
 
 class FakeModelRegistry:
@@ -70,13 +75,18 @@ class FakeExecutor:
 class FakeExecutorRegistry:
     def __init__(self) -> None:
         self.whisper = FakeExecutor("whisper", "automatic-speech-recognition", ["org/whisper-tiny"])
+        self.parakeet = FakeExecutor("parakeet", "automatic-speech-recognition", ["org/parakeet-tiny"])
         self.kokoro = FakeExecutor("kokoro", "text-to-speech", ["org/kokoro"])
 
     def all_executors(self):  # noqa: ANN201
-        return (self.whisper, self.kokoro)
+        return (self.whisper, self.parakeet, self.kokoro)
 
     @property
     def transcription(self):  # noqa: ANN201
+        return (self.whisper, self.parakeet)
+
+    @property
+    def translation(self):  # noqa: ANN201
         return (self.whisper,)
 
 
@@ -111,6 +121,13 @@ def transcription_params() -> dict[str, Any]:
         },
         "without_timestamps": False,
     }
+
+
+def translation_params() -> dict[str, Any]:
+    params = transcription_params()
+    for key in ("language", "hotwords", "timestamp_granularities", "without_timestamps"):
+        params.pop(key)
+    return params
 
 
 def test_lifecycle_methods_share_one_lazy_registry() -> None:
@@ -178,6 +195,28 @@ def test_transcription_rejects_invalid_audio_before_loading_the_registry() -> No
         service.call("transcribe", params, context())
     assert caught.value.code == "invalid_params"
     assert created == 0
+
+
+def test_non_streaming_translation_maps_the_request_and_uses_translation_executors_only() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+
+    assert service.call("translate", translation_params(), context()) == {"text": "fixture translation"}
+    request = registry.whisper.model_manager.last_translation_request
+    assert request is not None
+    assert request.model == "org/whisper-tiny"
+    assert request.audio.sample_rate == 16000
+    assert request.prompt is None
+    assert request.response_format == "json"
+    assert request.speech_segments[0].model_dump() == {"start": 0, "end": 4}
+    assert math.isinf(request.vad_options.max_speech_duration_s)
+
+    unsupported = translation_params()
+    unsupported["model"] = "org/parakeet-tiny"
+    with pytest.raises(RpcMethodError) as caught:
+        service.call("translate", unsupported, context())
+    assert caught.value.code == "model_not_available"
+    assert registry.parakeet.model_manager.last_translation_request is None
 
 
 @pytest.mark.parametrize(

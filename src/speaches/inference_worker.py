@@ -66,7 +66,7 @@ class InferenceWorkerService:
         # thread. Preserve a fast ping/list-loaded path, but initialize the
         # shared registry before dispatching the first model operation to the
         # executor thread.
-        if method in {"load_model", "transcribe"}:
+        if method in {"load_model", "transcribe", "translate"}:
             _ = self.registry
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
@@ -76,6 +76,7 @@ class InferenceWorkerService:
             "load_model": self._load_model,
             "unload_model": self._unload_model,
             "transcribe": self._transcribe,
+            "translate": self._translate,
         }
         handler = methods.get(method)
         if handler is None:
@@ -168,6 +169,40 @@ class InferenceWorkerService:
         executor = self._find_local_executor(model_id, tuple(self.registry.transcription), context)
         context.raise_if_cancelled()
         response = executor.model_manager.handle_non_streaming_transcription_request(request)
+        context.raise_if_cancelled()
+        return _serialize_transcription(response)
+
+    def _translate(self, params: JsonObject, context: RequestContext) -> JsonObject:
+        from pydantic import ValidationError
+
+        from speaches.executors.shared.handler_protocol import TranslationRequest
+        from speaches.executors.silero_vad_v5 import SpeechTimestamp, VadOptions
+
+        model_id = _required_string(params, "model")
+        audio = _decode_audio(_required_object(params, "audio"))
+        vad_params = dict(_required_object(params, "vad_options"))
+        if vad_params.get("max_speech_duration_s") is None:
+            vad_params["max_speech_duration_s"] = float("inf")
+
+        try:
+            request = TranslationRequest(
+                audio=audio,
+                model=model_id,
+                prompt=_optional_string(params, "prompt"),
+                response_format=_required_response_format(params),
+                temperature=_required_number(params, "temperature"),
+                speech_segments=[
+                    SpeechTimestamp.model_validate(segment)
+                    for segment in _required_object_list(params, "speech_segments")
+                ],
+                vad_options=VadOptions.model_validate(vad_params),
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise RpcMethodError("invalid_params", f"Invalid translation request: {error}") from error
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.translation), context)
+        context.raise_if_cancelled()
+        response = executor.model_manager.handle_translation_request(request)
         context.raise_if_cancelled()
         return _serialize_transcription(response)
 

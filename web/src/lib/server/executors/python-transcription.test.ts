@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	encodeRpcAudio,
 	encodeTranscriptionRequest,
+	encodeTranslationRequest,
 	PythonTranscriptionExecutor
 } from './python-transcription.ts';
-import type { TranscriptionRequest } from './types.ts';
+import type { TranscriptionRequest, TranslationRequest } from './types.ts';
 
 function request(): TranscriptionRequest {
 	return {
@@ -25,6 +26,19 @@ function request(): TranscriptionRequest {
 		},
 		hotwords: 'speachy',
 		withoutTimestamps: false
+	};
+}
+
+function translationRequest(): TranslationRequest {
+	const transcription = request();
+	return {
+		audio: transcription.audio,
+		model: transcription.model,
+		prompt: transcription.prompt,
+		responseFormat: transcription.responseFormat,
+		temperature: transcription.temperature,
+		speechSegments: transcription.speechSegments,
+		vadOptions: transcription.vadOptions
 	};
 }
 
@@ -55,6 +69,25 @@ describe('Python transcription RPC codec', () => {
 				speech_pad_ms: 400
 			},
 			without_timestamps: false
+		});
+	});
+
+	it('maps translation without transcription-only fields', () => {
+		expect(encodeTranslationRequest(translationRequest())).toEqual({
+			audio: encodeRpcAudio(translationRequest().audio),
+			model: 'org/whisper-tiny',
+			prompt: 'Names: Speachy',
+			response_format: 'verbose_json',
+			temperature: 0,
+			speech_segments: [{ start: 0, end: 4 }],
+			vad_options: {
+				threshold: 0.5,
+				neg_threshold: null,
+				min_speech_duration_ms: 0,
+				max_speech_duration_s: null,
+				min_silence_duration_ms: 160,
+				speech_pad_ms: 400
+			}
 		});
 	});
 });
@@ -104,5 +137,22 @@ describe('PythonTranscriptionExecutor', () => {
 				language: ['en']
 			}
 		]);
+	});
+
+	it('translates through the dedicated worker method and validates the result', async () => {
+		const rpcRequest = vi.fn(async () => ({ text: 'translated' }));
+		const executor = new PythonTranscriptionExecutor({ request: rpcRequest });
+		const signal = new AbortController().signal;
+
+		await expect(executor.translate(translationRequest(), signal)).resolves.toEqual({
+			text: 'translated'
+		});
+		expect(rpcRequest).toHaveBeenCalledWith(
+			'translate',
+			encodeTranslationRequest(translationRequest()),
+			{
+				signal
+			}
+		);
 	});
 });
