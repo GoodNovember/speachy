@@ -1,5 +1,5 @@
 import { endianness } from 'node:os';
-import { verboseTranscriptionSchema } from '$lib/types/api';
+import { transcriptionStreamEventSchema, verboseTranscriptionSchema } from '$lib/types/api';
 import {
 	listLocalModelsByTask,
 	listRemoteCatalogModelsByTask,
@@ -11,6 +11,7 @@ import type {
 	Model,
 	Transcription,
 	TranscriptionExecutor,
+	TranscriptionEvent,
 	TranscriptionRequest,
 	TranslationRequest,
 	VadOptions
@@ -28,8 +29,6 @@ type TranscriptionCatalog = {
 	listLocal(): Promise<CatalogModel[]>;
 	listRemote(): Promise<CatalogModel[]>;
 };
-
-export type NonStreamingTranscriptionExecutor = Omit<TranscriptionExecutor, 'transcribeStream'>;
 
 const catalog: TranscriptionCatalog = {
 	listLocal: () => listLocalModelsByTask('automatic-speech-recognition'),
@@ -120,7 +119,7 @@ function parseTranscription(value: unknown): Transcription {
 	};
 }
 
-export class PythonTranscriptionExecutor implements NonStreamingTranscriptionExecutor {
+export class PythonTranscriptionExecutor implements TranscriptionExecutor {
 	readonly name = 'python-transcription';
 	readonly task = 'automatic-speech-recognition' as const;
 
@@ -156,5 +155,85 @@ export class PythonTranscriptionExecutor implements NonStreamingTranscriptionExe
 			signal
 		});
 		return parseTranscription(response);
+	}
+
+	async *transcribeStream(
+		request: TranscriptionRequest,
+		signal: AbortSignal
+	): AsyncIterable<TranscriptionEvent> {
+		const controller = new AbortController();
+		const forwardAbort = (): void => controller.abort(signal.reason);
+		if (signal.aborted) forwardAbort();
+		else signal.addEventListener('abort', forwardAbort, { once: true });
+
+		const queued: unknown[] = [];
+		let notify: (() => void) | undefined;
+		let settled = false;
+		let terminal: unknown;
+		let failure: unknown;
+		const wake = (): void => {
+			notify?.();
+			notify = undefined;
+		};
+		const pending = this.#worker
+			.request('transcribe_stream', encodeTranscriptionRequest(request), {
+				signal: controller.signal,
+				onEvent: (event) => {
+					queued.push(event);
+					wake();
+				}
+			})
+			.then(
+				(value) => {
+					terminal = value;
+				},
+				(error: unknown) => {
+					failure = error;
+				}
+			)
+			.finally(() => {
+				settled = true;
+				wake();
+			});
+
+		let eventCount = 0;
+		let text = '';
+		let done = false;
+		try {
+			for (;;) {
+				while (queued.length > 0) {
+					const event = transcriptionStreamEventSchema.parse(queued.shift());
+					eventCount += 1;
+					if (event.type === 'transcript.text.delta') {
+						if (done) throw new Error('Python transcription stream emitted a delta after done');
+						text += event.delta;
+						yield { type: 'delta', delta: event.delta };
+					} else {
+						if (done)
+							throw new Error('Python transcription stream emitted more than one done event');
+						done = true;
+						yield { type: 'done', text };
+					}
+				}
+				if (settled) break;
+				await new Promise<void>((resolve) => {
+					notify = resolve;
+				});
+			}
+			await pending;
+			if (failure !== undefined) throw failure;
+			if (
+				!done ||
+				typeof terminal !== 'object' ||
+				terminal === null ||
+				(terminal as Record<string, unknown>).event_count !== eventCount
+			) {
+				throw new Error('Python transcription stream ended with an invalid event count');
+			}
+		} finally {
+			signal.removeEventListener('abort', forwardAbort);
+			if (!settled) controller.abort(new Error('Transcription stream consumer closed'));
+			await pending;
+		}
 	}
 }

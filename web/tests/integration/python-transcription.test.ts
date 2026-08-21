@@ -126,6 +126,35 @@ describe.runIf(RUN_INTEGRATION)('Python transcription integration', () => {
 				AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
 			);
 			expect(translation.text.trim().length).toBeGreaterThan(0);
+
+			const streamEvents = [];
+			for await (const event of executor.transcribeStream(
+				{
+					audio: { ...audio, name: 'audio' },
+					model: MODEL_ID,
+					responseFormat: 'json',
+					temperature: 0,
+					timestampGranularities: ['segment'],
+					speechSegments: [{ start: 0, end: audio.data.length }],
+					vadOptions: {
+						threshold: 0.5,
+						minSpeechDurationMs: 0,
+						maxSpeechDurationS: 30,
+						minSilenceDurationMs: 160,
+						speechPadMs: 400
+					},
+					withoutTimestamps: true
+				},
+				AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
+			)) {
+				streamEvents.push(event);
+			}
+			const streamedText = streamEvents
+				.filter((event) => event.type === 'delta')
+				.map((event) => event.delta)
+				.join('');
+			expect(streamedText.trim().length).toBeGreaterThan(0);
+			expect(streamEvents.at(-1)).toEqual({ type: 'done', text: streamedText });
 		} finally {
 			await worker.close();
 		}

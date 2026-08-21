@@ -37,6 +37,7 @@ class FakeModelManager:
         self.loaded_models: dict[str, Any] = {}
         self.last_transcription_request: Any | None = None
         self.last_translation_request: Any | None = None
+        self.last_streaming_transcription_request: Any | None = None
 
     def load_model(self, model_id: str) -> FakeLease:
         return FakeLease(self, model_id)
@@ -54,6 +55,19 @@ class FakeModelManager:
     def handle_translation_request(self, request: Any) -> tuple[str, str]:
         self.last_translation_request = request
         return "fixture translation", "text/plain"
+
+    def handle_streaming_transcription_request(self, request: Any):  # noqa: ANN201
+        self.last_streaming_transcription_request = request
+        yield FakeEvent({"type": "transcript.text.delta", "delta": "fixture transcript"})
+        yield FakeEvent({"type": "transcript.text.done", "text": ""})
+
+
+class FakeEvent:
+    def __init__(self, value: dict[str, Any]) -> None:
+        self.value = value
+
+    def model_dump(self, **_kwargs: Any) -> dict[str, Any]:
+        return self.value
 
 
 class FakeModelRegistry:
@@ -217,6 +231,38 @@ def test_non_streaming_translation_maps_the_request_and_uses_translation_executo
         service.call("translate", unsupported, context())
     assert caught.value.code == "model_not_available"
     assert registry.parakeet.model_manager.last_translation_request is None
+
+
+def test_streaming_transcription_emits_ordered_events_before_the_terminal_result() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+    events: list[dict[str, Any]] = []
+    stream_context = RequestContext(cancelled=threading.Event(), emit=events.append)
+
+    assert service.call("transcribe_stream", transcription_params(), stream_context) == {"event_count": 2}
+    assert events == [
+        {"type": "transcript.text.delta", "delta": "fixture transcript"},
+        {"type": "transcript.text.done", "text": ""},
+    ]
+    request = registry.whisper.model_manager.last_streaming_transcription_request
+    assert request is not None
+    assert request.stream is True
+
+
+def test_streaming_transcription_checks_cancellation_between_events() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+    cancelled = threading.Event()
+    events: list[dict[str, Any]] = []
+
+    def emit(event: dict[str, Any]) -> None:
+        events.append(event)
+        cancelled.set()
+
+    with pytest.raises(RpcMethodError) as caught:
+        service.call("transcribe_stream", transcription_params(), RequestContext(cancelled, emit))
+    assert caught.value.code == "request_cancelled"
+    assert events == [{"type": "transcript.text.delta", "delta": "fixture transcript"}]
 
 
 @pytest.mark.parametrize(

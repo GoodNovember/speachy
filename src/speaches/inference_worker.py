@@ -66,7 +66,7 @@ class InferenceWorkerService:
         # thread. Preserve a fast ping/list-loaded path, but initialize the
         # shared registry before dispatching the first model operation to the
         # executor thread.
-        if method in {"load_model", "transcribe", "translate"}:
+        if method in {"load_model", "transcribe", "transcribe_stream", "translate"}:
             _ = self.registry
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
@@ -76,6 +76,7 @@ class InferenceWorkerService:
             "load_model": self._load_model,
             "unload_model": self._unload_model,
             "transcribe": self._transcribe,
+            "transcribe_stream": self._transcribe_stream,
             "translate": self._translate,
         }
         handler = methods.get(method)
@@ -206,6 +207,49 @@ class InferenceWorkerService:
         context.raise_if_cancelled()
         return _serialize_transcription(response)
 
+    def _transcribe_stream(self, params: JsonObject, context: RequestContext) -> JsonObject:
+        from pydantic import ValidationError
+
+        from speaches.executors.shared.handler_protocol import TranscriptionRequest
+        from speaches.executors.silero_vad_v5 import SpeechTimestamp, VadOptions
+
+        model_id = _required_string(params, "model")
+        audio = _decode_audio(_required_object(params, "audio"))
+        vad_params = dict(_required_object(params, "vad_options"))
+        if vad_params.get("max_speech_duration_s") is None:
+            vad_params["max_speech_duration_s"] = float("inf")
+
+        try:
+            request = TranscriptionRequest(
+                audio=audio,
+                model=model_id,
+                stream=True,
+                language=_optional_string(params, "language"),
+                prompt=_optional_string(params, "prompt"),
+                response_format=_required_response_format(params),
+                temperature=_required_number(params, "temperature"),
+                hotwords=_optional_string(params, "hotwords"),
+                timestamp_granularities=_required_timestamp_granularities(params),
+                speech_segments=[
+                    SpeechTimestamp.model_validate(segment)
+                    for segment in _required_object_list(params, "speech_segments")
+                ],
+                vad_options=VadOptions.model_validate(vad_params),
+                without_timestamps=_required_bool(params, "without_timestamps"),
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise RpcMethodError("invalid_params", f"Invalid streaming transcription request: {error}") from error
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.transcription), context)
+        context.raise_if_cancelled()
+        event_count = 0
+        for event in executor.model_manager.handle_streaming_transcription_request(request):
+            context.raise_if_cancelled()
+            context.emit(_serialize_streaming_transcription_event(event))
+            event_count += 1
+        context.raise_if_cancelled()
+        return {"event_count": event_count}
+
     @staticmethod
     def _find_local_executor(model_id: str, executors: tuple[Any, ...], context: RequestContext) -> Any:
         for executor in executors:
@@ -321,6 +365,20 @@ def _serialize_transcription(response: Any) -> JsonObject:
         if isinstance(value, dict) and isinstance(value.get("text"), str):
             return value
     raise RpcMethodError("invalid_worker_response", "Unsupported transcription response from executor")
+
+
+def _serialize_streaming_transcription_event(event: Any) -> JsonObject:
+    model_dump = getattr(event, "model_dump", None)
+    if not callable(model_dump):
+        raise RpcMethodError("invalid_worker_response", "Streaming transcription event is not serializable")
+    value = model_dump(mode="json", exclude_none=True)
+    if not isinstance(value, dict):
+        raise RpcMethodError("invalid_worker_response", "Streaming transcription event must be an object")
+    event_type = value.get("type")
+    field = "delta" if event_type == "transcript.text.delta" else "text"
+    if event_type not in ("transcript.text.delta", "transcript.text.done") or not isinstance(value.get(field), str):
+        raise RpcMethodError("invalid_worker_response", "Unsupported streaming transcription event")
+    return value
 
 
 class InferenceRpcServer:

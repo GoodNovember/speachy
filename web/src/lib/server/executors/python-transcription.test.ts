@@ -155,4 +155,79 @@ describe('PythonTranscriptionExecutor', () => {
 			}
 		);
 	});
+
+	it('streams validated events in order and reconstructs terminal text from deltas', async () => {
+		const rpcRequest = vi.fn(async (_method, _params, options) => {
+			options?.onEvent?.({ type: 'transcript.text.delta', delta: 'hello' });
+			options?.onEvent?.({ type: 'transcript.text.delta', delta: ' world' });
+			options?.onEvent?.({ type: 'transcript.text.done', text: '' });
+			return { event_count: 3 };
+		});
+		const executor = new PythonTranscriptionExecutor({ request: rpcRequest });
+		const signal = new AbortController().signal;
+		const events = [];
+
+		for await (const event of executor.transcribeStream(request(), signal)) events.push(event);
+
+		expect(events).toEqual([
+			{ type: 'delta', delta: 'hello' },
+			{ type: 'delta', delta: ' world' },
+			{ type: 'done', text: 'hello world' }
+		]);
+		expect(rpcRequest).toHaveBeenCalledWith(
+			'transcribe_stream',
+			encodeTranscriptionRequest(request()),
+			expect.objectContaining({ signal: expect.any(AbortSignal), onEvent: expect.any(Function) })
+		);
+	});
+
+	it('rejects a stream whose terminal event count does not match delivery', async () => {
+		const executor = new PythonTranscriptionExecutor({
+			request: async (_method, _params, options) => {
+				options?.onEvent?.({ type: 'transcript.text.done', text: '' });
+				return { event_count: 2 };
+			}
+		});
+
+		const consume = async (): Promise<void> => {
+			for await (const _event of executor.transcribeStream(
+				request(),
+				new AbortController().signal
+			)) {
+				// Drain the iterator so its terminal result is validated.
+			}
+		};
+		await expect(consume()).rejects.toThrow('invalid event count');
+	});
+
+	it('cancels the worker request when the stream consumer stops early', async () => {
+		let abortReason: unknown;
+		const executor = new PythonTranscriptionExecutor({
+			request: (_method, _params, options) => {
+				options?.onEvent?.({ type: 'transcript.text.delta', delta: 'partial' });
+				return new Promise((_resolve, reject) => {
+					options?.signal?.addEventListener(
+						'abort',
+						() => {
+							abortReason = options.signal?.reason;
+							reject(abortReason);
+						},
+						{ once: true }
+					);
+				});
+			}
+		});
+		const iterator = executor
+			.transcribeStream(request(), new AbortController().signal)
+			[Symbol.asyncIterator]();
+
+		await expect(iterator.next()).resolves.toEqual({
+			done: false,
+			value: { type: 'delta', delta: 'partial' }
+		});
+		await iterator.return?.();
+
+		expect(abortReason).toBeInstanceOf(Error);
+		expect((abortReason as Error).message).toBe('Transcription stream consumer closed');
+	});
 });
