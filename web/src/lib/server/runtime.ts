@@ -1,4 +1,5 @@
 import type { Config } from './config.ts';
+import type { PythonWorkerClient } from './executors/python-worker.ts';
 
 // The production server and SvelteKit's request handler are built as separate
 // bundles, so a plain module-level singleton would be instantiated twice. A
@@ -8,6 +9,8 @@ const RUNTIME_KEY = Symbol.for('speachy.runtime');
 export type Runtime = {
 	config: Config;
 	startedAt: number;
+	inferenceWorker?: PythonWorkerClient;
+	inferenceWorkerStart?: Promise<PythonWorkerClient>;
 };
 
 type RuntimeHost = typeof globalThis & { [RUNTIME_KEY]?: Runtime };

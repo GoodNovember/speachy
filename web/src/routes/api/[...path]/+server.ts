@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { proxyToReference } from '$lib/server/proxy';
 
-// Covers /api/ps, the loaded-model endpoints the model page uses.
+// Covers any remaining Python /api routes. /api/ps is native now and wins as
+// the more specific SvelteKit route.
 const handler: RequestHandler = ({ request, params }) =>
 	proxyToReference(request, `/api/${params.path}`);
 

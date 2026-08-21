@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { bootstrap } from './lib/server/bootstrap.ts';
+import { closeInferenceWorker } from './lib/server/executors/python-runtime.ts';
 import { createLogger } from './lib/server/logger.ts';
 import { attachRealtimeServer, detachRealtimeServer } from './lib/server/realtime/socket.ts';
 
@@ -34,6 +35,7 @@ server.listen(runtime.config.port, runtime.config.host, () => {
 async function shutdown(signal: string): Promise<void> {
 	logger.info(`Received ${signal}, shutting down`);
 	await detachRealtimeServer();
+	await closeInferenceWorker(runtime);
 	server.close(() => process.exit(0));
 	setTimeout(() => process.exit(1), 10_000).unref();
 }

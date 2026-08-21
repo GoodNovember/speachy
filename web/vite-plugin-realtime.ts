@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite';
 import { bootstrap } from './src/lib/server/bootstrap.ts';
+import { closeInferenceWorker } from './src/lib/server/executors/python-runtime.ts';
 import { attachRealtimeServer } from './src/lib/server/realtime/socket.ts';
 
 // In dev, Vite owns the HTTP server, so the realtime socket attaches here. In
@@ -11,8 +12,9 @@ export function realtimeDev(): Plugin {
 		name: 'speachy-realtime-dev',
 		apply: 'serve',
 		configureServer(server) {
-			bootstrap();
+			const runtime = bootstrap();
 			if (server.httpServer !== null) attachRealtimeServer(server.httpServer);
+			server.httpServer?.once('close', () => void closeInferenceWorker(runtime));
 		}
 	};
 }

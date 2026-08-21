@@ -23,7 +23,14 @@ function accept(message) {
 	}
 
 	if (message.method === 'ping') {
-		send({ id: message.id, type: 'result', result: { protocol_version: 1, pid: process.pid } });
+		send({
+			id: message.id,
+			type: 'result',
+			result: {
+				protocol_version: Number(process.env.SPEACHY_FIXTURE_PROTOCOL_VERSION ?? 1),
+				pid: process.pid
+			}
+		});
 		return;
 	}
 	if (message.method === 'list_loaded') {

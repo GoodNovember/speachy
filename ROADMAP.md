@@ -137,6 +137,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] `auth_test.py` — the SvelteKit handle factory accepts injected configuration, so enabled and disabled auth are covered without managing a second live process
 - [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
   - [x] Buffered NDJSON transport and lifecycle methods: `ping`, `list_loaded`, `load_model`, `unload_model`; includes request IDs, structured errors, ordered events, cooperative cancellation, and a TypeScript lifecycle client
+  - [x] Lazy shared worker lifecycle in the SvelteKit runtime, including protocol handshake, dev/production shutdown, and native `GET`/`POST`/`DELETE /api/ps` routes
   - [ ] Executor methods: transcription/translation, speech streaming, VAD, speaker embedding, and diarization
 - [ ] RPC-backed executor implementations in TypeScript
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
@@ -214,9 +215,9 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `GET /v1/audio/models`             | `routers/models.py`           | [x]  |
 | `GET /v1/audio/voices`             | `routers/models.py`           | [x]  |
 | `GET /v1/registry`                 | `routers/models.py`           | [x]  |
-| `GET /api/ps`                      | `routers/misc.py`             | [ ]  |
-| `POST /api/ps/{model_id}`          | `routers/misc.py`             | [ ]  |
-| `DELETE /api/ps/{model_id}`        | `routers/misc.py`             | [ ]  |
+| `GET /api/ps`                      | `routers/misc.py`             | [x]  |
+| `POST /api/ps/{model_id}`          | `routers/misc.py`             | [x]  |
+| `DELETE /api/ps/{model_id}`        | `routers/misc.py`             | [x]  |
 | `GET /health`                      | `routers/misc.py`             | [x]  |
 | `WS /v1/realtime`                  | `routers/realtime_ws.py`      | [ ]  |
 | `POST /v1/realtime` (WebRTC)       | `routers/realtime_rtc.py`     | [ ]  |
