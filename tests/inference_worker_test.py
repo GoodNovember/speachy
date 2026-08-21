@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from speaches import inference_worker
 from speaches.inference_worker import (
     InferenceRpcServer,
     InferenceWorkerService,
@@ -386,6 +387,31 @@ def test_server_prepares_model_runtime_on_the_main_thread() -> None:
     assert factory_thread is threading.main_thread()
     assert messages[-1]["type"] == "result"
     assert messages[-1]["result"]["model_id"] == "org/whisper-tiny"
+
+
+def test_server_prepares_embedding_native_runtime_on_the_main_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_thread: threading.Thread | None = None
+
+    def prepare_native_runtime(method: str) -> None:
+        nonlocal runtime_thread
+        assert method == "embed"
+        runtime_thread = threading.current_thread()
+
+    monkeypatch.setattr(inference_worker, "_prepare_native_runtime", prepare_native_runtime)
+    request = {
+        "id": 1,
+        "method": "embed",
+        "params": {"model_id": "org/wespeaker", "audio": transcription_params()["audio"]},
+    }
+    requests = BytesIO(f"{json.dumps(request)}\n".encode())
+    responses = BytesIO()
+    server = InferenceRpcServer(InferenceWorkerService(FakeExecutorRegistry))
+    server.run(requests, responses)
+
+    messages = [json.loads(line) for line in responses.getvalue().splitlines()]
+    assert runtime_thread is threading.main_thread()
+    assert messages[-1]["type"] == "result"
+    assert messages[-1]["result"]["length"] == 3
 
 
 def test_cancelled_context_stops_before_dispatch() -> None:

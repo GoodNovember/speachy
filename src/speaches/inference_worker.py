@@ -22,6 +22,13 @@ type ResponseFormat = Literal["json", "srt", "text", "verbose_json", "vtt"]
 type TimestampGranularity = Literal["segment", "word"]
 
 
+def _prepare_native_runtime(method: str) -> None:
+    if method == "embed":
+        # pyannote.audio's native dependency stack can deadlock when its first
+        # import happens in the executor thread on Windows.
+        import pyannote.audio  # noqa: F401
+
+
 class RpcMethodError(Exception):
     def __init__(self, code: str, message: str, data: JsonObject | None = None) -> None:
         super().__init__(message)
@@ -68,6 +75,7 @@ class InferenceWorkerService:
         # executor thread.
         if method in {"embed", "load_model", "synthesize", "transcribe", "transcribe_stream", "translate"}:
             _ = self.registry
+        _prepare_native_runtime(method)
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
         methods: dict[str, Callable[[JsonObject, RequestContext], Any]] = {
