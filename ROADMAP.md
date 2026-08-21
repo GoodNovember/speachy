@@ -139,7 +139,12 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] Buffered NDJSON transport and lifecycle methods: `ping`, `list_loaded`, `load_model`, `unload_model`; includes request IDs, structured errors, ordered events, cooperative cancellation, and a TypeScript lifecycle client
   - [x] Lazy shared worker lifecycle in the SvelteKit runtime, including protocol handshake, dev/production shutdown, and native `GET`/`POST`/`DELETE /api/ps` routes
   - [ ] Executor methods: transcription/translation, speech streaming, VAD, speaker embedding, and diarization
+    - [x] Non-streaming transcription with canonical little-endian Float32 audio, semantic JSON results, and lazy main-thread native-runtime initialization
+    - [ ] Streaming transcription and translation
+    - [ ] Speech streaming, VAD, speaker embedding, and diarization
 - [ ] RPC-backed executor implementations in TypeScript
+  - [x] Non-streaming Python transcription adapter with request encoding, response validation, cancellation forwarding, and local-model catalog support
+  - [ ] Complete the transcription interface with streaming and translation, then add the remaining executor adapters
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac

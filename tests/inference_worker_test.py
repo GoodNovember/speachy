@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 from io import BytesIO
 import json
+import math
 import threading
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 
 from speaches.inference_worker import (
@@ -32,6 +35,7 @@ class FakeLease:
 class FakeModelManager:
     def __init__(self) -> None:
         self.loaded_models: dict[str, Any] = {}
+        self.last_transcription_request: Any | None = None
 
     def load_model(self, model_id: str) -> FakeLease:
         return FakeLease(self, model_id)
@@ -41,6 +45,10 @@ class FakeModelManager:
         if model.ref_count > 0:
             raise ValueError(f"Model {model_id} is still in use")
         del self.loaded_models[model_id]
+
+    def handle_non_streaming_transcription_request(self, request: Any) -> tuple[str, str]:
+        self.last_transcription_request = request
+        return "fixture transcript", "text/plain"
 
 
 class FakeModelRegistry:
@@ -67,9 +75,42 @@ class FakeExecutorRegistry:
     def all_executors(self):  # noqa: ANN201
         return (self.whisper, self.kokoro)
 
+    @property
+    def transcription(self):  # noqa: ANN201
+        return (self.whisper,)
+
 
 def context() -> RequestContext:
     return RequestContext(cancelled=threading.Event(), emit=lambda _event: None)
+
+
+def transcription_params() -> dict[str, Any]:
+    samples = np.array([-1.0, -0.25, 0.25, 1.0], dtype="<f4")
+    return {
+        "audio": {
+            "encoding": "f32le-base64",
+            "data": base64.b64encode(samples.tobytes()).decode(),
+            "sample_rate": 16000,
+            "name": "fixture",
+        },
+        "model": "org/whisper-tiny",
+        "language": "en",
+        "prompt": None,
+        "response_format": "json",
+        "temperature": 0,
+        "hotwords": "speachy",
+        "timestamp_granularities": ["segment", "word"],
+        "speech_segments": [{"start": 0, "end": 4}],
+        "vad_options": {
+            "threshold": 0.5,
+            "neg_threshold": None,
+            "min_speech_duration_ms": 0,
+            "max_speech_duration_s": None,
+            "min_silence_duration_ms": 160,
+            "speech_pad_ms": 400,
+        },
+        "without_timestamps": False,
+    }
 
 
 def test_lifecycle_methods_share_one_lazy_registry() -> None:
@@ -101,6 +142,42 @@ def test_lifecycle_methods_share_one_lazy_registry() -> None:
     }
     assert service.call("list_loaded", {}, context()) == {"models": []}
     assert created == 1
+
+
+def test_non_streaming_transcription_decodes_audio_and_maps_the_request() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+
+    assert service.call("transcribe", transcription_params(), context()) == {"text": "fixture transcript"}
+    request = registry.whisper.model_manager.last_transcription_request
+    assert request is not None
+    assert request.model == "org/whisper-tiny"
+    assert request.stream is False
+    assert request.audio.sample_rate == 16000
+    assert request.audio.name == "fixture"
+    np.testing.assert_array_equal(request.audio.data, np.array([-1.0, -0.25, 0.25, 1.0], dtype=np.float32))
+    assert request.timestamp_granularities == ["segment", "word"]
+    assert request.speech_segments[0].model_dump() == {"start": 0, "end": 4}
+    assert math.isinf(request.vad_options.max_speech_duration_s)
+    assert request.hotwords == "speachy"
+    assert request.without_timestamps is False
+
+
+def test_transcription_rejects_invalid_audio_before_loading_the_registry() -> None:
+    created = 0
+
+    def create_registry() -> FakeExecutorRegistry:
+        nonlocal created
+        created += 1
+        return FakeExecutorRegistry()
+
+    params = transcription_params()
+    params["audio"]["data"] = "not base64"
+    service = InferenceWorkerService(create_registry)
+    with pytest.raises(RpcMethodError) as caught:
+        service.call("transcribe", params, context())
+    assert caught.value.code == "invalid_params"
+    assert created == 0
 
 
 @pytest.mark.parametrize(
@@ -138,6 +215,25 @@ def test_server_frames_results_and_structured_errors_as_ndjson() -> None:
     }
     assert by_id[None]["type"] == "error"
     assert by_id[None]["error"]["code"] == "parse_error"
+
+
+def test_server_prepares_model_runtime_on_the_main_thread() -> None:
+    factory_thread: threading.Thread | None = None
+
+    def create_registry() -> FakeExecutorRegistry:
+        nonlocal factory_thread
+        factory_thread = threading.current_thread()
+        return FakeExecutorRegistry()
+
+    requests = BytesIO(b'{"id":1,"method":"load_model","params":{"model_id":"org/whisper-tiny"}}\n')
+    responses = BytesIO()
+    server = InferenceRpcServer(InferenceWorkerService(create_registry))
+    server.run(requests, responses)
+
+    messages = [json.loads(line) for line in responses.getvalue().splitlines()]
+    assert factory_thread is threading.main_thread()
+    assert messages[-1]["type"] == "result"
+    assert messages[-1]["result"]["model_id"] == "org/whisper-tiny"
 
 
 def test_cancelled_context_stops_before_dispatch() -> None:

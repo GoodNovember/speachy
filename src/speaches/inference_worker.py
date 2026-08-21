@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
+import math
 import os
 import sys
 import threading
-from typing import TYPE_CHECKING, Any, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO, Literal, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -15,6 +18,8 @@ if TYPE_CHECKING:
 PROTOCOL_VERSION = 1
 type RequestId = int | str
 type JsonObject = dict[str, Any]
+type ResponseFormat = Literal["json", "srt", "text", "verbose_json", "vtt"]
+type TimestampGranularity = Literal["segment", "word"]
 
 
 class RpcMethodError(Exception):
@@ -56,12 +61,21 @@ class InferenceWorkerService:
                 self._registry = self._registry_factory()
             return self._registry
 
+    def prepare(self, method: str) -> None:
+        # Some native runtime modules must be initialized on Python's main
+        # thread. Preserve a fast ping/list-loaded path, but initialize the
+        # shared registry before dispatching the first model operation to the
+        # executor thread.
+        if method in {"load_model", "transcribe"}:
+            _ = self.registry
+
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
         methods: dict[str, Callable[[JsonObject, RequestContext], Any]] = {
             "ping": self._ping,
             "list_loaded": self._list_loaded,
             "load_model": self._load_model,
             "unload_model": self._unload_model,
+            "transcribe": self._transcribe,
         }
         handler = methods.get(method)
         if handler is None:
@@ -118,6 +132,45 @@ class InferenceWorkerService:
             return {"model_id": model_id, "executor": executor.name, "task": executor.task}
         raise RpcMethodError("model_not_loaded", f"Model '{model_id}' is not loaded")
 
+    def _transcribe(self, params: JsonObject, context: RequestContext) -> JsonObject:
+        from pydantic import ValidationError
+
+        from speaches.executors.shared.handler_protocol import TranscriptionRequest
+        from speaches.executors.silero_vad_v5 import SpeechTimestamp, VadOptions
+
+        model_id = _required_string(params, "model")
+        audio = _decode_audio(_required_object(params, "audio"))
+        vad_params = dict(_required_object(params, "vad_options"))
+        if vad_params.get("max_speech_duration_s") is None:
+            vad_params["max_speech_duration_s"] = float("inf")
+
+        try:
+            request = TranscriptionRequest(
+                audio=audio,
+                model=model_id,
+                stream=False,
+                language=_optional_string(params, "language"),
+                prompt=_optional_string(params, "prompt"),
+                response_format=_required_response_format(params),
+                temperature=_required_number(params, "temperature"),
+                hotwords=_optional_string(params, "hotwords"),
+                timestamp_granularities=_required_timestamp_granularities(params),
+                speech_segments=[
+                    SpeechTimestamp.model_validate(segment)
+                    for segment in _required_object_list(params, "speech_segments")
+                ],
+                vad_options=VadOptions.model_validate(vad_params),
+                without_timestamps=_required_bool(params, "without_timestamps"),
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise RpcMethodError("invalid_params", f"Invalid transcription request: {error}") from error
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.transcription), context)
+        context.raise_if_cancelled()
+        response = executor.model_manager.handle_non_streaming_transcription_request(request)
+        context.raise_if_cancelled()
+        return _serialize_transcription(response)
+
     @staticmethod
     def _find_local_executor(model_id: str, executors: tuple[Any, ...], context: RequestContext) -> Any:
         for executor in executors:
@@ -135,6 +188,104 @@ def _required_string(params: JsonObject, key: str) -> str:
     if not isinstance(value, str) or not value:
         raise RpcMethodError("invalid_params", f"'{key}' must be a non-empty string")
     return value
+
+
+def _optional_string(params: JsonObject, key: str) -> str | None:
+    value = params.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RpcMethodError("invalid_params", f"'{key}' must be a string or null")
+    return value
+
+
+def _required_number(params: JsonObject, key: str) -> float:
+    value = params.get(key)
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise RpcMethodError("invalid_params", f"'{key}' must be a number")
+    number = float(value)
+    if not math.isfinite(number):
+        raise RpcMethodError("invalid_params", f"'{key}' must be finite")
+    return number
+
+
+def _required_bool(params: JsonObject, key: str) -> bool:
+    value = params.get(key)
+    if not isinstance(value, bool):
+        raise RpcMethodError("invalid_params", f"'{key}' must be a boolean")
+    return value
+
+
+def _required_object(params: JsonObject, key: str) -> JsonObject:
+    value = params.get(key)
+    if not isinstance(value, dict):
+        raise RpcMethodError("invalid_params", f"'{key}' must be an object")
+    return value
+
+
+def _required_object_list(params: JsonObject, key: str) -> list[JsonObject]:
+    value = params.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise RpcMethodError("invalid_params", f"'{key}' must be an array of objects")
+    return value
+
+
+def _required_response_format(params: JsonObject) -> ResponseFormat:
+    value = _required_string(params, "response_format")
+    if value not in ("json", "srt", "text", "verbose_json", "vtt"):
+        raise RpcMethodError("invalid_params", f"Unsupported transcription response format: {value}")
+    return cast("ResponseFormat", value)
+
+
+def _required_timestamp_granularities(params: JsonObject) -> list[TimestampGranularity]:
+    value = params.get("timestamp_granularities")
+    if not isinstance(value, list) or not all(item in ("segment", "word") for item in value):
+        raise RpcMethodError("invalid_params", "'timestamp_granularities' must contain only segment or word")
+    return cast("list[TimestampGranularity]", value)
+
+
+def _decode_audio(value: JsonObject) -> Any:
+    import numpy as np
+
+    from speaches.audio import Audio
+
+    if value.get("encoding") != "f32le-base64":
+        raise RpcMethodError("invalid_params", "'audio.encoding' must be 'f32le-base64'")
+    encoded = value.get("data")
+    if not isinstance(encoded, str):
+        raise RpcMethodError("invalid_params", "'audio.data' must be a base64 string")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise RpcMethodError("invalid_params", "'audio.data' is not valid base64") from error
+    if len(raw) % 4 != 0:
+        raise RpcMethodError("invalid_params", "Decoded f32le audio length must be divisible by four")
+
+    sample_rate = value.get("sample_rate")
+    if not isinstance(sample_rate, int) or isinstance(sample_rate, bool) or sample_rate <= 0:
+        raise RpcMethodError("invalid_params", "'audio.sample_rate' must be a positive integer")
+    name = value.get("name")
+    if name is not None and not isinstance(name, str):
+        raise RpcMethodError("invalid_params", "'audio.name' must be a string or null")
+
+    samples = np.frombuffer(raw, dtype="<f4").astype(np.float32, copy=False)
+    if not np.isfinite(samples).all():
+        raise RpcMethodError("invalid_params", "Decoded audio samples must all be finite")
+    return Audio(samples, sample_rate=sample_rate, name=name)
+
+
+def _serialize_transcription(response: Any) -> JsonObject:
+    if isinstance(response, tuple):
+        text, _media_type = response
+        if not isinstance(text, str):
+            raise RpcMethodError("invalid_worker_response", "Transcription text must be a string")
+        return {"text": text}
+    model_dump = getattr(response, "model_dump", None)
+    if callable(model_dump):
+        value = model_dump(mode="json", exclude_none=True)
+        if isinstance(value, dict) and isinstance(value.get("text"), str):
+            return value
+    raise RpcMethodError("invalid_worker_response", "Unsupported transcription response from executor")
 
 
 class InferenceRpcServer:
@@ -186,6 +337,13 @@ class InferenceRpcServer:
             return
         if not isinstance(params, dict):
             self._send_error(request_id, "invalid_request", "Request 'params' must be an object")
+            return
+
+        try:
+            self._service.prepare(method)
+        except Exception as error:  # noqa: BLE001
+            print(f"Inference worker preparation for '{method}' failed: {error!r}", file=sys.stderr, flush=True)
+            self._send_error(request_id, "internal_error", "Inference worker preparation failed")
             return
 
         cancelled = threading.Event()
