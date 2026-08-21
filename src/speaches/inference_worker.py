@@ -66,12 +66,13 @@ class InferenceWorkerService:
         # thread. Preserve a fast ping/list-loaded path, but initialize the
         # shared registry before dispatching the first model operation to the
         # executor thread.
-        if method in {"load_model", "synthesize", "transcribe", "transcribe_stream", "translate"}:
+        if method in {"embed", "load_model", "synthesize", "transcribe", "transcribe_stream", "translate"}:
             _ = self.registry
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
         methods: dict[str, Callable[[JsonObject, RequestContext], Any]] = {
             "ping": self._ping,
+            "embed": self._embed,
             "list_loaded": self._list_loaded,
             "load_model": self._load_model,
             "unload_model": self._unload_model,
@@ -277,6 +278,26 @@ class InferenceWorkerService:
         context.raise_if_cancelled()
         return {"event_count": event_count}
 
+    def _embed(self, params: JsonObject, context: RequestContext) -> JsonObject:
+        from pydantic import ValidationError
+
+        from speaches.executors.shared.handler_protocol import SpeakerEmbeddingRequest
+
+        model_id = _required_string(params, "model_id")
+        try:
+            request = SpeakerEmbeddingRequest(
+                audio=_decode_audio(_required_object(params, "audio")),
+                model_id=model_id,
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            raise RpcMethodError("invalid_params", f"Invalid speaker embedding request: {error}") from error
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.speaker_embedding), context)
+        context.raise_if_cancelled()
+        embedding = executor.model_manager.handle_speaker_embedding_request(request)
+        context.raise_if_cancelled()
+        return _encode_float32_vector(embedding)
+
     @staticmethod
     def _find_local_executor(model_id: str, executors: tuple[Any, ...], context: RequestContext) -> Any:
         for executor in executors:
@@ -393,6 +414,19 @@ def _encode_audio(audio: Any) -> JsonObject:
         "encoding": "f32le-base64",
         "data": base64.b64encode(samples.astype("<f4", copy=False).tobytes()).decode(),
         "sample_rate": sample_rate,
+    }
+
+
+def _encode_float32_vector(value: Any) -> JsonObject:
+    import numpy as np
+
+    vector = np.asarray(value, dtype=np.float32)
+    if vector.ndim != 1 or not np.isfinite(vector).all():
+        raise RpcMethodError("invalid_worker_response", "Speaker embedding must be a finite vector")
+    return {
+        "encoding": "f32le-base64",
+        "data": base64.b64encode(vector.astype("<f4", copy=False).tobytes()).decode(),
+        "length": len(vector),
     }
 
 

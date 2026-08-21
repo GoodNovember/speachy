@@ -39,6 +39,7 @@ class FakeModelManager:
         self.last_translation_request: Any | None = None
         self.last_streaming_transcription_request: Any | None = None
         self.last_speech_request: Any | None = None
+        self.last_embedding_request: Any | None = None
 
     def load_model(self, model_id: str) -> FakeLease:
         return FakeLease(self, model_id)
@@ -66,6 +67,10 @@ class FakeModelManager:
         self.last_speech_request = request
         yield SimpleNamespace(data=np.array([-0.5, 0.5], dtype=np.float32), sample_rate=24000)
         yield SimpleNamespace(data=np.array([0.25], dtype=np.float32), sample_rate=24000)
+
+    def handle_speaker_embedding_request(self, request: Any) -> np.ndarray:
+        self.last_embedding_request = request
+        return np.array([-0.5, 0.25, 1.0], dtype=np.float32)
 
 
 class FakeEvent:
@@ -97,9 +102,10 @@ class FakeExecutorRegistry:
         self.whisper = FakeExecutor("whisper", "automatic-speech-recognition", ["org/whisper-tiny"])
         self.parakeet = FakeExecutor("parakeet", "automatic-speech-recognition", ["org/parakeet-tiny"])
         self.kokoro = FakeExecutor("kokoro", "text-to-speech", ["org/kokoro"])
+        self.wespeaker = FakeExecutor("wespeaker", "speaker-embedding", ["org/wespeaker"])
 
     def all_executors(self):  # noqa: ANN201
-        return (self.whisper, self.parakeet, self.kokoro)
+        return (self.whisper, self.parakeet, self.kokoro, self.wespeaker)
 
     @property
     def transcription(self):  # noqa: ANN201
@@ -112,6 +118,10 @@ class FakeExecutorRegistry:
     @property
     def text_to_speech(self):  # noqa: ANN201
         return (self.kokoro,)
+
+    @property
+    def speaker_embedding(self):  # noqa: ANN201
+        return (self.wespeaker,)
 
 
 def context() -> RequestContext:
@@ -299,6 +309,27 @@ def test_speech_synthesis_emits_canonical_audio_chunks() -> None:
     assert request.voice == "af_heart"
     assert request.text == "Hello"
     assert request.speed == 1
+
+
+def test_speaker_embedding_returns_a_canonical_float32_vector() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+
+    result = service.call(
+        "embed",
+        {"model_id": "org/wespeaker", "audio": transcription_params()["audio"]},
+        context(),
+    )
+    assert result["encoding"] == "f32le-base64"
+    assert result["length"] == 3
+    np.testing.assert_array_equal(
+        np.frombuffer(base64.b64decode(result["data"]), dtype="<f4"),
+        np.array([-0.5, 0.25, 1.0], dtype=np.float32),
+    )
+    request = registry.wespeaker.model_manager.last_embedding_request
+    assert request is not None
+    assert request.model_id == "org/wespeaker"
+    assert request.audio.sample_rate == 16000
 
 
 @pytest.mark.parametrize(

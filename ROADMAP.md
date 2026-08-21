@@ -144,12 +144,14 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
     - [x] Streaming transcription with ordered delta/done events, cooperative cancellation, terminal event-count validation, and accumulated terminal text
     - [x] Speech streaming with canonical Float32 audio events, terminal event-count validation, model-specific voice discovery, and consumer-driven cancellation
     - [x] VAD intentionally remains outside the worker; the in-process `onnxruntime-node` implementation is tracked in Phase 3
-    - [ ] Speaker embedding and diarization
+    - [x] Speaker embedding with canonical Float32 vector results and finite-value validation; fixture-verified, with the cache-gated WeSpeaker integration still pending a local model
+    - [ ] Diarization
 - [ ] RPC-backed executor implementations in TypeScript
   - [x] Non-streaming Python transcription and translation adapter with request encoding, response validation, cancellation forwarding, and local-model catalog support
   - [x] Complete the Python transcription interface with validated streaming events and consumer-driven cancellation
   - [x] Python speech adapter with validated Float32 chunks, local-model voice lookup, and consumer-driven cancellation
-  - [ ] Add the speaker embedding and diarization adapters
+  - [x] Python speaker embedding adapter with binary vector validation, cancellation forwarding, and local-model catalog support
+  - [ ] Add the diarization adapter
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac
