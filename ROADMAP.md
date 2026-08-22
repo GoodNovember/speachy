@@ -157,6 +157,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
 - [ ] Implement the HTTP endpoints (see parity table below)
+  - [x] Shared multipart audio decoding (PCM/WAV in-process, cancellable ffmpeg fallback), task-specific executor composition, and the native speaker-embedding route
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
@@ -217,7 +218,7 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `POST /v1/audio/translations`      | `routers/stt.py`              | [ ]  |
 | `POST /v1/audio/speech`            | `routers/speech.py`           | [ ]  |
 | `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [ ]  |
-| `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [ ]  |
+| `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [x]  |
 | `POST /v1/audio/diarization`       | `routers/diarization.py`      | [ ]  |
 | `POST /v1/chat/completions`        | `routers/chat.py`             | [ ]  |
 | `GET /v1/models`                   | `routers/models.py`           | [x]  |
