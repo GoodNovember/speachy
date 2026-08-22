@@ -47,6 +47,7 @@ Locked decisions. Add to this as open questions resolve.
 - **Known-speaker diarization mapping remains reference-only for now.** The generic diarization executor returns timestamped speaker labels and supports an optional fixed speaker count. The Python HTTP route's `known_speaker_names[]` / `known_speaker_references[]` feature reaches through Pyannote's private embedding internals and has no pytest contract coverage. The native route returns an explicit 501 for those fields instead of silently ignoring them; preserving or dropping that extension is a separate compatibility decision.
 - **An audio workspace is a user-selected, explicitly initialized directory.** The `Open Audio Workspace` button directly invokes `showDirectoryPicker({ mode: 'readwrite' })`; a root `speachy.workspace.json` file blesses the directory. Chromium gets read/write workspace support, while unsupported browsers degrade to read-only folder selection plus explicit downloads. Browser permission handles remain in IndexedDB and never enter the portable workspace.
 - **Workspace identity, artifacts, browser state, and cache have separate owners.** `speachy.workspace.json` contains only versioned workspace identity and stable relative-path preferences. Audio and analysis files are portable reviewed artifacts. Directory permissions and last-open state are browser-local. Playhead and panel state are transient. Rebuildable waveform data is cache, not canonical workspace state.
+- **The persistent inspector lives at `/workspace`; shared timeline primitives know neither folders nor sockets.** `/stt` remains a stateless one-file playground, `/mic` remains a capture check, and `/v1/*` remains the compatibility API. Waveform, capture, playhead, timed-annotation, speaker-lane, selection, and diagnostics modules accept both final batch results and provisional realtime updates without owning directory handles, IndexedDB, WebSockets, or artifact writes.
 
 ### Open questions
 
@@ -174,6 +175,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 
 This is the acceptance surface for the native transcription and diarization endpoints, not a separate demo. It keeps the original audio, raw inference responses, derived alignment, browser permissions, and transient UI state in distinct ownership domains.
 
+- [ ] Add `/workspace` as a dedicated application route, distinct from the stateless `/stt` and `/mic` playgrounds and from the `/v1/*` API surface
 - [ ] Define and validate `speachy.workspace.json` v1 with `kind`, `schemaVersion`, stable workspace `id`, display `name`, and relative `recordingsDirectory` / `analysisDirectory` paths
   - [ ] Keep absolute paths, permission handles, volatile timestamps, file indexes, caches, and transient UI state out of the manifest
   - [ ] Reject malformed manifests without mutation; open a workspace with a newer schema read-only instead of overwriting it
@@ -183,6 +185,7 @@ This is the acceptance surface for the native transcription and diarization endp
   - [ ] Feature-detect `showDirectoryPicker`; fall back to read-only directory input and downloadable recordings/artifacts where directory writes are unavailable
 - [ ] Enumerate supported audio files and expose explicit refresh, selected-file, unprocessed, ready, stale, and failed states without requiring a filesystem watcher
 - [ ] Build the inspection timeline fixture-first, then connect it to the same-origin APIs
+  - [ ] Define a transport- and storage-neutral timed-annotation model that can add, revise, and finalize transcript words, transcript segments, and speaker turns instead of assuming immutable completed arrays
   - [ ] Browser-decoded waveform and native audio playback share one seekable playhead
   - [ ] Transcription segments and words align horizontally by timestamp
   - [ ] Diarization renders one lane per speaker so overlaps remain visible; speaker labels map deterministically into a small accessible palette and remain visible as text
@@ -214,6 +217,8 @@ The largest single chunk, and the part most worth doing carefully. Everything he
 - [ ] `response-event-router.ts` from `response_event_router.py` — text, audio, and function-call response handlers over a chat-completion stream
 - [ ] Message manager and WebSocket transport from `message_manager.py`
 - [ ] Session lifecycle: 30-minute timeout, cancellation via `AbortController` where Python uses `asyncio.TaskGroup`
+- [ ] Reuse the Phase 2.5 capture, waveform, playhead, timed-annotation, speaker-lane, selection, and diagnostics primitives for provisional realtime state; keep the `/realtime` route responsible only for session and transport ownership
+- [ ] Add an explicit `Save Session to Workspace` transition that writes the captured WAV and the same versioned analysis artifact used by batch inspection; realtime remains in memory until the user chooses to save
 - [ ] Port `tests/realtime/realtime_conversation_test.py`
 - [ ] WebRTC endpoint via `werift`, from `realtime_rtc.py` and `realtime/rtc/audio_stream_track.py` — pending the open question above
 - [ ] Delete `src/speaches/realtime/` and `src/speaches/routers/`
