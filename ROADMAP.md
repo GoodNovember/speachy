@@ -164,6 +164,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [ ] Implement the HTTP endpoints (see parity table below)
   - [x] Shared multipart audio decoding (PCM/WAV in-process, cancellable ffmpeg fallback), task-specific executor composition, and the native speaker-embedding route
   - [x] Native diarization route with JSON and RTTM responses, duration and filename semantics, model/decode/error validation, cancellation forwarding, and real cached-model contract parity
+  - [x] Native transcription and translation routes with all five response formats, timestamp granularities and word-null semantics, streaming SSE and cancellation, validation/error boundaries, and real cached-model contract parity. Until the Phase 3 VAD executor lands, decoded uploads intentionally enter Whisper as one full-file speech segment
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
@@ -253,8 +254,8 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 
 | Endpoint                           | Source                        | Done |
 | ---------------------------------- | ----------------------------- | :--: |
-| `POST /v1/audio/transcriptions`    | `routers/stt.py`              | [ ]  |
-| `POST /v1/audio/translations`      | `routers/stt.py`              | [ ]  |
+| `POST /v1/audio/transcriptions`    | `routers/stt.py`              | [x]  |
+| `POST /v1/audio/translations`      | `routers/stt.py`              | [x]  |
 | `POST /v1/audio/speech`            | `routers/speech.py`           | [ ]  |
 | `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [ ]  |
 | `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [x]  |

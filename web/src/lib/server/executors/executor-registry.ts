@@ -1,8 +1,14 @@
 import { getInferenceWorker } from './python-runtime.ts';
 import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
+import { PythonTranscriptionExecutor } from './python-transcription.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
-import type { DiarizationExecutor, ExecutorBase, SpeakerEmbeddingExecutor } from './types.ts';
+import type {
+	DiarizationExecutor,
+	ExecutorBase,
+	SpeakerEmbeddingExecutor,
+	TranscriptionExecutor
+} from './types.ts';
 
 const lazyPythonWorker = {
 	async request(
@@ -33,4 +39,12 @@ export function getSpeakerEmbeddingExecutors(): readonly SpeakerEmbeddingExecuto
 
 export function getDiarizationExecutors(): readonly DiarizationExecutor[] {
 	return [new PythonDiarizationExecutor(lazyPythonWorker)];
+}
+
+export function getTranscriptionExecutors(): readonly TranscriptionExecutor[] {
+	return [new PythonTranscriptionExecutor(lazyPythonWorker)];
+}
+
+export function getTranslationExecutors(): readonly TranscriptionExecutor[] {
+	return [new PythonTranscriptionExecutor(lazyPythonWorker)];
 }
