@@ -167,6 +167,19 @@ describe('formatted audio streams', () => {
 		setTimeout(() => controller.abort(new Error('active cancellation')), 20);
 		await expect(encoded).rejects.toThrow('active cancellation');
 	});
+
+	it('surfaces a missing ffmpeg executable without crashing the process', async () => {
+		async function* source() {
+			yield sine();
+		}
+		await expect(
+			collect(
+				streamAudioAsFormattedBytes(source(), 'mp3', {
+					ffmpegPath: 'speachy-definitely-missing-ffmpeg'
+				})
+			)
+		).rejects.toMatchObject({ code: 'ENOENT' });
+	});
 });
 
 describe('ffmpeg resolution', () => {

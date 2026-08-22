@@ -1,4 +1,3 @@
-import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { win32 } from 'node:path';
@@ -203,7 +202,28 @@ const FFMPEG_FORMAT_ARGS: Record<Exclude<AudioFormat, 'pcm' | 'wav'>, string[]> 
 
 async function writeChunk(stream: NodeJS.WritableStream, chunk: Uint8Array): Promise<void> {
 	if (stream.write(chunk)) return;
-	await once(stream, 'drain');
+	await new Promise<void>((resolve, reject) => {
+		const cleanup = (): void => {
+			stream.removeListener('drain', onDrain);
+			stream.removeListener('close', onClose);
+			stream.removeListener('error', onError);
+		};
+		const onDrain = (): void => {
+			cleanup();
+			resolve();
+		};
+		const onClose = (): void => {
+			cleanup();
+			reject(new Error('Audio encoder input closed before draining'));
+		};
+		const onError = (error: Error): void => {
+			cleanup();
+			reject(error);
+		};
+		stream.once('drain', onDrain);
+		stream.once('close', onClose);
+		stream.once('error', onError);
+	});
 }
 
 export type AudioStreamOptions = {
@@ -295,20 +315,29 @@ export async function* streamAudioAsFormattedBytes(
 
 	let writeError: unknown;
 	let exited = false;
-	const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-		(resolve, reject) => {
-			process.once('error', reject);
-			process.once('close', (code, signal) => {
-				exited = true;
-				resolve({ code, signal });
-			});
-		}
-	);
-	const stderr = (async () => {
-		const chunks: Buffer[] = [];
-		for await (const chunk of process.stderr) chunks.push(Buffer.from(chunk));
-		return Buffer.concat(chunks).toString('utf8');
-	})();
+	const exit = new Promise<
+		| { kind: 'exit'; code: number | null; signal: NodeJS.Signals | null }
+		| { kind: 'error'; error: Error }
+	>((resolve) => {
+		// Resolve spawn failures into the process result instead of rejecting a
+		// promise that is only awaited after stdout drains. On Node's strict
+		// unhandled-rejection mode, a missing ffmpeg binary otherwise terminates
+		// the entire server before this generator can surface ENOENT to its caller.
+		process.once('error', (error) => {
+			// Windows may leave the stdio handles open after spawn ENOENT. Closing
+			// them wakes both the stdout iterator and a writer waiting for drain.
+			process.stdin.destroy();
+			process.stdout.destroy();
+			process.stderr.destroy();
+			resolve({ kind: 'error', error });
+		});
+		process.once('close', (code, signal) => {
+			exited = true;
+			resolve({ kind: 'exit', code, signal });
+		});
+	});
+	const stderrChunks: Buffer[] = [];
+	process.stderr.on('data', (chunk) => stderrChunks.push(Buffer.from(chunk)));
 	const abort = (): void => {
 		process.kill();
 	};
@@ -336,11 +365,18 @@ export async function* streamAudioAsFormattedBytes(
 	})();
 
 	try {
-		for await (const chunk of process.stdout) yield new Uint8Array(Buffer.from(chunk));
+		try {
+			for await (const chunk of process.stdout) yield new Uint8Array(Buffer.from(chunk));
+		} catch (error) {
+			const result = await exit;
+			if (result.kind === 'error') throw result.error;
+			throw error;
+		}
 		await writer;
 		const result = await exit;
-		const errorOutput = await stderr;
+		const errorOutput = Buffer.concat(stderrChunks).toString('utf8');
 		if (options.signal?.aborted) throw options.signal.reason;
+		if (result.kind === 'error') throw result.error;
 		if (writeError !== undefined) throw writeError;
 		if (result.code !== 0) {
 			throw new Error(

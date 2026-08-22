@@ -1,12 +1,14 @@
 import { getInferenceWorker } from './python-runtime.ts';
 import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
+import { PythonSpeechExecutor } from './python-speech.ts';
 import { PythonTranscriptionExecutor } from './python-transcription.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
 import type {
 	DiarizationExecutor,
 	ExecutorBase,
 	SpeakerEmbeddingExecutor,
+	SpeechExecutor,
 	TranscriptionExecutor
 } from './types.ts';
 
@@ -47,4 +49,8 @@ export function getTranscriptionExecutors(): readonly TranscriptionExecutor[] {
 
 export function getTranslationExecutors(): readonly TranscriptionExecutor[] {
 	return [new PythonTranscriptionExecutor(lazyPythonWorker)];
+}
+
+export function getSpeechExecutors(): readonly SpeechExecutor[] {
+	return [new PythonSpeechExecutor(lazyPythonWorker)];
 }

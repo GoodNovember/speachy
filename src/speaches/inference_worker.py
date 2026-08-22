@@ -288,10 +288,13 @@ class InferenceWorkerService:
         executor = self._find_local_executor(model_id, tuple(self.registry.text_to_speech), context)
         context.raise_if_cancelled()
         event_count = 0
-        for audio in executor.model_manager.handle_speech_request(request):
-            context.raise_if_cancelled()
-            context.emit({"type": "speech.audio.delta", "audio": _encode_audio(audio)})
-            event_count += 1
+        try:
+            for audio in executor.model_manager.handle_speech_request(request):
+                context.raise_if_cancelled()
+                context.emit({"type": "speech.audio.delta", "audio": _encode_audio(audio)})
+                event_count += 1
+        except ValueError as error:
+            raise RpcMethodError("invalid_params", str(error)) from error
         context.raise_if_cancelled()
         return {"event_count": event_count}
 

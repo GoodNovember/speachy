@@ -348,6 +348,26 @@ def test_speech_synthesis_emits_canonical_audio_chunks() -> None:
     assert request.speed == 1
 
 
+def test_speech_synthesis_reports_model_validation_as_invalid_params() -> None:
+    registry = FakeExecutorRegistry()
+
+    def reject(_request: Any):  # noqa: ANN202
+        raise ValueError("Speed must be between 0.5 and 2.0, got 3")
+        yield  # pragma: no cover - keeps this a generator like the real handler
+
+    registry.kokoro.model_manager.handle_speech_request = reject
+    service = InferenceWorkerService(lambda: registry)
+
+    with pytest.raises(RpcMethodError) as caught:
+        service.call(
+            "synthesize",
+            {"model": "org/kokoro", "voice": "af_heart", "text": "Hello", "speed": 3},
+            context(),
+        )
+    assert caught.value.code == "invalid_params"
+    assert str(caught.value) == "Speed must be between 0.5 and 2.0, got 3"
+
+
 def test_speaker_embedding_returns_a_canonical_float32_vector() -> None:
     registry = FakeExecutorRegistry()
     service = InferenceWorkerService(lambda: registry)

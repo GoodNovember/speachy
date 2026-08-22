@@ -165,6 +165,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] Shared multipart audio decoding (PCM/WAV in-process, cancellable ffmpeg fallback), task-specific executor composition, and the native speaker-embedding route
   - [x] Native diarization route with JSON and RTTM responses, duration and filename semantics, model/decode/error validation, cancellation forwarding, and real cached-model contract parity
   - [x] Native transcription and translation routes with all five response formats, timestamp granularities and word-null semantics, streaming SSE and cancellation, validation/error boundaries, and real cached-model contract parity. Until the Phase 3 VAD executor lands, decoded uploads intentionally enter Whisper as one full-file speech segment
+  - [x] Native speech route with incremental PCM/WAV/ffmpeg formatting, PCM16 SSE events, model and voice selection, text cleanup, sample-rate conversion, eager validation before headers, cancellation, and cached Kokoro contract coverage. Missing ffmpeg now fails only the affected stream instead of hanging or terminating the Node server
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
@@ -256,7 +257,7 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | ---------------------------------- | ----------------------------- | :--: |
 | `POST /v1/audio/transcriptions`    | `routers/stt.py`              | [x]  |
 | `POST /v1/audio/translations`      | `routers/stt.py`              | [x]  |
-| `POST /v1/audio/speech`            | `routers/speech.py`           | [ ]  |
+| `POST /v1/audio/speech`            | `routers/speech.py`           | [x]  |
 | `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [ ]  |
 | `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [x]  |
 | `POST /v1/audio/diarization`       | `routers/diarization.py`      | [x]  |

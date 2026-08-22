@@ -83,14 +83,15 @@ describe.skipIf(!up)('speech contract', () => {
 		expect((deltas[0].audio ?? '').length).toBeGreaterThan(0);
 	});
 
-	// Everything validated inside handle_speech_request is checked lazily, once
-	// StreamingResponse starts consuming the generator -- which is after the 200
-	// and its headers have gone out. The client gets a severed connection rather
-	// than an error. These tests pin that behaviour rather than assert it is
-	// correct: our implementation must validate eagerly and return 4xx, at which
-	// point these two flip and should be rewritten.
-	const expectSeveredNotRejected = async (body: Record<string, unknown>) => {
+	// The Python reference checks these lazily after its 200 headers and severs
+	// the body. The native route improves that boundary with an eager 422. Accept
+	// both during the transition; focused native route tests require the 422.
+	const expectRejectedOrReferenceSevered = async (body: Record<string, unknown>) => {
 		const response = await postJson('/v1/audio/speech', body);
+		if (response.status === 422) {
+			expect(await response.json()).toHaveProperty('detail');
+			return;
+		}
 		expect(response.status).toBe(200);
 		// Either the body arrives empty or reading it throws, depending on how the
 		// runtime surfaces a connection cut mid-stream. Both mean severed.
@@ -101,16 +102,16 @@ describe.skipIf(!up)('speech contract', () => {
 		expect(severed).toBe(true);
 	};
 
-	it('severs the connection on an unsupported voice instead of rejecting it', async () => {
-		await expectSeveredNotRejected({
+	it('rejects an unsupported voice, or preserves the reference severed stream', async () => {
+		await expectRejectedOrReferenceSevered({
 			model: speechModel,
 			voice: 'definitely-not-a-voice',
 			input: 'hello'
 		});
 	});
 
-	it('severs the connection on an out-of-range speed instead of rejecting it', async () => {
-		await expectSeveredNotRejected({
+	it('rejects an out-of-range speed, or preserves the reference severed stream', async () => {
+		await expectRejectedOrReferenceSevered({
 			model: speechModel,
 			voice,
 			input: 'hello',
