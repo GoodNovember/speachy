@@ -50,7 +50,7 @@ function parseSegments(value: unknown): DiarizationSegment[] {
 			segment.start < 0 ||
 			typeof segment.end !== 'number' ||
 			!Number.isFinite(segment.end) ||
-			segment.end < segment.start ||
+			segment.end <= segment.start ||
 			typeof segment.speaker !== 'string' ||
 			segment.speaker.length === 0
 		) {

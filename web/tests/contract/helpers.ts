@@ -65,6 +65,8 @@ export type DiscoveredModels = {
 	transcription?: string;
 	speech?: string;
 	voice?: string;
+	speakerEmbedding?: string;
+	diarization?: string;
 };
 
 let discovered: DiscoveredModels | undefined;
@@ -80,6 +82,8 @@ export async function models(): Promise<DiscoveredModels> {
 	};
 	const transcription = listed.data.find((m) => m.task === 'automatic-speech-recognition')?.id;
 	const speech = listed.data.find((m) => m.task === 'text-to-speech')?.id;
+	const speakerEmbedding = listed.data.find((m) => m.task === 'speaker-embedding')?.id;
+	const diarization = listed.data.find((m) => m.task === 'speaker-diarization')?.id;
 
 	let voice: string | undefined;
 	if (speech !== undefined) {
@@ -89,8 +93,121 @@ export async function models(): Promise<DiscoveredModels> {
 		voice = voices.voices[0]?.name ?? voices.voices[0]?.id;
 	}
 
-	discovered = { transcription, speech, voice };
+	discovered = { transcription, speech, voice, speakerEmbedding, diarization };
 	return discovered;
+}
+
+export function cosineSimilarity(left: number[], right: number[]): number {
+	if (left.length !== right.length || left.length === 0) {
+		throw new Error('Embedding vectors must have the same non-zero length');
+	}
+	let dot = 0;
+	let leftMagnitude = 0;
+	let rightMagnitude = 0;
+	for (let index = 0; index < left.length; index += 1) {
+		dot += left[index]! * right[index]!;
+		leftMagnitude += left[index]! ** 2;
+		rightMagnitude += right[index]! ** 2;
+	}
+	return dot / Math.sqrt(leftMagnitude * rightMagnitude);
+}
+
+function encodePcm16Wav(payload: Uint8Array, sampleRate: number): ArrayBuffer {
+	const blockAlign = 2;
+	const output = new ArrayBuffer(44 + payload.byteLength);
+	const outputBytes = new Uint8Array(output);
+	const outputView = new DataView(output);
+	const writeAscii = (at: number, value: string) => {
+		for (let index = 0; index < value.length; index += 1) {
+			outputView.setUint8(at + index, value.charCodeAt(index));
+		}
+	};
+	writeAscii(0, 'RIFF');
+	outputView.setUint32(4, output.byteLength - 8, true);
+	writeAscii(8, 'WAVE');
+	writeAscii(12, 'fmt ');
+	outputView.setUint32(16, 16, true);
+	outputView.setUint16(20, 1, true);
+	outputView.setUint16(22, 1, true);
+	outputView.setUint32(24, sampleRate, true);
+	outputView.setUint32(28, sampleRate * blockAlign, true);
+	outputView.setUint16(32, blockAlign, true);
+	outputView.setUint16(34, 16, true);
+	writeAscii(36, 'data');
+	outputView.setUint32(40, payload.byteLength, true);
+	outputBytes.set(payload, 44);
+	return output;
+}
+
+export function sinePcm16Wav(
+	frequency: number,
+	durationSeconds: number,
+	sampleRate = 16_000
+): ArrayBuffer {
+	const sampleCount = Math.round(durationSeconds * sampleRate);
+	const payload = new Uint8Array(sampleCount * 2);
+	const view = new DataView(payload.buffer);
+	for (let index = 0; index < sampleCount; index += 1) {
+		const sample = Math.sin((2 * Math.PI * frequency * index) / sampleRate);
+		view.setInt16(index * 2, Math.trunc(sample * 32_767), true);
+	}
+	return encodePcm16Wav(payload, sampleRate);
+}
+
+// The checked-in speech fixture is deliberately short. Repeat its mono PCM16
+// payload into a conventional WAV so diarization gets enough speech to produce
+// stable turns without introducing another binary fixture.
+export function repeatPcm16Wav(source: ArrayBuffer, minimumSeconds: number): ArrayBuffer {
+	const bytes = new Uint8Array(source);
+	const view = new DataView(source);
+	const ascii = (offset: number, length: number) =>
+		String.fromCharCode(...bytes.subarray(offset, offset + length));
+	if (ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WAVE') {
+		throw new Error('Audio fixture is not a RIFF/WAVE file');
+	}
+
+	let offset = 12;
+	let sampleRate: number | undefined;
+	let blockAlign: number | undefined;
+	let data: Uint8Array | undefined;
+	while (offset + 8 <= bytes.byteLength) {
+		const id = ascii(offset, 4);
+		const size = view.getUint32(offset + 4, true);
+		const body = offset + 8;
+		if (body + size > bytes.byteLength) break;
+		if (id === 'fmt ') {
+			if (
+				size < 16 ||
+				view.getUint16(body, true) !== 1 ||
+				view.getUint16(body + 2, true) !== 1 ||
+				view.getUint16(body + 14, true) !== 16
+			) {
+				throw new Error('Audio fixture must be mono 16-bit PCM');
+			}
+			sampleRate = view.getUint32(body + 4, true);
+			blockAlign = view.getUint16(body + 12, true);
+		} else if (id === 'data') {
+			data = bytes.slice(body, body + size);
+		}
+		offset = body + size + (size % 2);
+	}
+	if (
+		sampleRate === undefined ||
+		blockAlign === undefined ||
+		data === undefined ||
+		data.length === 0
+	) {
+		throw new Error('Audio fixture is missing fmt or data');
+	}
+
+	const seconds = data.byteLength / (sampleRate * blockAlign);
+	const repetitions = Math.max(1, Math.ceil(minimumSeconds / seconds));
+	const payload = new Uint8Array(data.byteLength * repetitions);
+	for (let index = 0; index < repetitions; index += 1) {
+		payload.set(data, index * data.byteLength);
+	}
+
+	return encodePcm16Wav(payload, sampleRate);
 }
 
 // Minimal SRT structural check, standing in for the python `srt` package.

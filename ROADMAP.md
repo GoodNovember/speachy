@@ -44,6 +44,7 @@ Locked decisions. Add to this as open questions resolve.
 - **Our server takes port 8000; the reference moved to 8001.** 8000 is what every existing compose file and doc points at for the OpenAI-compatible API, and our server is the eventual drop-in replacement, so it should inherit that address rather than force a breaking change at the end of Phase 4.
 - **SvelteKit's CSRF protection must stay off.** It rejects cross-site POSTs carrying form content types, which is exactly how `/v1/audio/transcriptions` is called. Every non-browser client — the OpenAI SDK, curl, the ported pytest suite — sends multipart with no matching `Origin` and gets a 403. Safe to disable here only because the API authenticates with an `Authorization` header and never cookies, so there is no ambient authority for CSRF to abuse. **If cookie or session auth is ever added, this must be revisited.** Found in the production build; the dev server did not surface it.
 - **The Shape B Python worker uses buffered NDJSON over stdio.** It is a local child process, so a separate HTTP server adds ports, authentication, firewall behaviour, and deployment surface without buying isolation. Protocol v1 has request IDs, terminal results, structured errors, ordered streaming events, and explicit cooperative-cancellation messages. `src/speaches/inference_worker.py` owns the Python side; `web/src/lib/server/executors/python-worker.ts` owns process lifecycle and framing in Node.
+- **Known-speaker diarization mapping remains reference-only for now.** The generic diarization executor returns timestamped speaker labels and supports an optional fixed speaker count. The Python HTTP route's `known_speaker_names[]` / `known_speaker_references[]` feature reaches through Pyannote's private embedding internals and has no pytest contract coverage. The native route returns an explicit 501 for those fields instead of silently ignoring them; preserving or dropping that extension is a separate compatibility decision.
 
 ### Open questions
 
@@ -126,13 +127,14 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 
 ## Phase 2 — Test suite, then the HTTP surface
 
-- [x] Port `tests/` to Vitest against the OpenAI SDK, pointed at the Python server. Green before writing a single handler. Lives in `web/tests/contract/`, runs with `npm run test:contract`, and targets whatever `SPEACHY_BASE_URL` points at so the same tests will verify our own server later. 33 tests, self-skipping when no server is listening
+- [x] Port `tests/` to Vitest against the OpenAI SDK, pointed at the Python server. Green before writing a single handler. Lives in `web/tests/contract/`, runs with `npm run test:contract`, and targets whatever `SPEACHY_BASE_URL` points at so the same tests will verify our own server later. 44 tests, self-skipping when no server is listening
   - [x] `api_timestamp_granularities_test.py` — all five granularity combinations, and words present only when asked for. The two `openai_*` files are **not** ported: they hit the real OpenAI API rather than speaches
   - [x] `speech_test.py`, `sse_test.py` — wav/mp3/pcm headers, sse framing, srt and vtt parsed structurally with deliberately malformed input to prove the parsers are not vacuous
   - [x] `api_model_test.py` — list, filter by task, fetch by slashed id, 404 shape, voices, `/api/ps`. `model_manager_test.py` needs in-process config injection and is covered instead by the unit tests for `model-manager.ts`
   - [x] `api_chat_test.py` — text and spoken replies, both non-streaming and streaming; discovers the configured local chat backend model and accepts explicit environment overrides
   - [x] `auth_test.py` — ported as focused handle tests with injected enabled/disabled auth configuration
-  - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
+  - [x] `vad_test.py` — integer millisecond timestamps
+  - [x] `speech_embedding_test.py`, `diarization_test.py` — finite 256-value embeddings, repeat-input similarity, JSON duration and segment bounds, RTTM structure, default response format, real-speech segments, and model-not-found behavior; verified against both the Python reference and the built SvelteKit server with the cached WeSpeaker and Pyannote Community-1 models
   - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
   - [x] `auth_test.py` — the SvelteKit handle factory accepts injected configuration, so enabled and disabled auth are covered without managing a second live process
 - [x] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
@@ -158,6 +160,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
 - [ ] Implement the HTTP endpoints (see parity table below)
   - [x] Shared multipart audio decoding (PCM/WAV in-process, cancellable ffmpeg fallback), task-specific executor composition, and the native speaker-embedding route
+  - [x] Native diarization route with JSON and RTTM responses, duration and filename semantics, model/decode/error validation, cancellation forwarding, and real cached-model contract parity
 - [ ] Repoint the Vitest suite at the SvelteKit server; get green again
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
@@ -219,7 +222,7 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `POST /v1/audio/speech`            | `routers/speech.py`           | [ ]  |
 | `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [ ]  |
 | `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [x]  |
-| `POST /v1/audio/diarization`       | `routers/diarization.py`      | [ ]  |
+| `POST /v1/audio/diarization`       | `routers/diarization.py`      | [x]  |
 | `POST /v1/chat/completions`        | `routers/chat.py`             | [ ]  |
 | `GET /v1/models`                   | `routers/models.py`           | [x]  |
 | `GET /v1/models/{model_id}`        | `routers/models.py`           | [x]  |

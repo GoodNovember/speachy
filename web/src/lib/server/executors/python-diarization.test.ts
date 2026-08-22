@@ -64,6 +64,7 @@ describe('PythonDiarizationExecutor', () => {
 		for (const result of [
 			{},
 			[{ start: -1, end: 1, speaker: 'SPEAKER_00' }],
+			[{ start: 1, end: 1, speaker: 'SPEAKER_00' }],
 			[{ start: 2, end: 1, speaker: 'SPEAKER_00' }],
 			[{ start: 0, end: Number.NaN, speaker: 'SPEAKER_00' }],
 			[{ start: 0, end: 1, speaker: '' }]
