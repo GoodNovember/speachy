@@ -86,7 +86,9 @@ class WespeakerSpeakerEmbeddingModelManager(BaseModelManager):
     @traced()
     def handle_speaker_embedding_request(self, request: SpeakerEmbeddingRequest, **_kwargs) -> SpeakerEmbeddingResponse:
         with self.load_model(request.model_id) as inference:
-            waveform = torch.from_numpy(request.audio.data).unsqueeze(0).float()
+            # RPC audio is decoded as a view over immutable base64 bytes.
+            # PyTorch requires writable NumPy storage for a safe shared tensor.
+            waveform = torch.from_numpy(request.audio.data.copy()).unsqueeze(0).float()
             embedding = np.asarray(inference({"waveform": waveform, "sample_rate": request.audio.sample_rate}))
             if embedding.ndim == 2:
                 embedding = embedding.squeeze()

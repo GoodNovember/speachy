@@ -1,9 +1,14 @@
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.ts';
 import type { Runtime } from '../runtime.ts';
 import { PythonWorkerClient } from './python-worker.ts';
-import { closeInferenceWorker, startInferenceWorker } from './python-runtime.ts';
+import {
+	closeInferenceWorker,
+	resolvePythonWorkerLaunch,
+	startInferenceWorker
+} from './python-runtime.ts';
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/python-worker.mjs', import.meta.url));
 
@@ -24,6 +29,35 @@ function fixtureWorker(protocolVersion = 1): PythonWorkerClient {
 }
 
 describe('Python inference runtime', () => {
+	it('resolves the repository venv and project root when the server starts from web', () => {
+		const web = resolve('C:\\fixture', 'speachy', 'web');
+		const root = resolve(web, '..');
+		const python = resolve(root, '.venv', 'Scripts/python.exe');
+		const existing = new Set([resolve(root, 'pyproject.toml'), python]);
+
+		expect(
+			resolvePythonWorkerLaunch(
+				{},
+				{ cwd: web, platform: 'win32', pathExists: (path) => existing.has(path) }
+			)
+		).toEqual({ command: python, cwd: root });
+	});
+
+	it('keeps an explicit Python override while still using the project root', () => {
+		const web = resolve('C:\\fixture', 'speachy', 'web');
+		const root = resolve(web, '..');
+		expect(
+			resolvePythonWorkerLaunch(
+				{ SPEACHY_PYTHON: 'custom-python' },
+				{
+					cwd: web,
+					platform: 'win32',
+					pathExists: (path) => path === resolve(root, 'pyproject.toml')
+				}
+			)
+		).toEqual({ command: 'custom-python', cwd: root });
+	});
+
 	it('shares one concurrently-started worker and closes it once', async () => {
 		const state = runtime();
 		let starts = 0;

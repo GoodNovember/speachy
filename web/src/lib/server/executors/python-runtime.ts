@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { getRuntime, type Runtime } from '../runtime.ts';
 import { PythonWorkerClient, type PythonWorkerOptions, type WorkerPing } from './python-worker.ts';
 
@@ -7,6 +9,35 @@ export type PythonWorkerFactory = (options: PythonWorkerOptions) => PythonWorker
 
 const createWorker: PythonWorkerFactory = (options) => new PythonWorkerClient(options);
 
+export type PythonWorkerLaunch = Pick<PythonWorkerOptions, 'command' | 'cwd'>;
+
+export function resolvePythonWorkerLaunch(
+	env: NodeJS.ProcessEnv = process.env,
+	context: {
+		cwd?: string;
+		platform?: NodeJS.Platform;
+		pathExists?: (path: string) => boolean;
+	} = {}
+): PythonWorkerLaunch {
+	const cwd = context.cwd ?? process.cwd();
+	const platform = context.platform ?? process.platform;
+	const pathExists = context.pathExists ?? existsSync;
+	const projectRoot = [cwd, resolve(cwd, '..')].find((root) =>
+		pathExists(resolve(root, 'pyproject.toml'))
+	);
+	const localPython =
+		projectRoot === undefined
+			? undefined
+			: resolve(projectRoot, '.venv', platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+
+	return {
+		command:
+			env.SPEACHY_PYTHON ??
+			(localPython !== undefined && pathExists(localPython) ? localPython : 'python'),
+		...(projectRoot === undefined ? {} : { cwd: projectRoot })
+	};
+}
+
 export async function startInferenceWorker(
 	runtime: Runtime,
 	factory: PythonWorkerFactory = createWorker
@@ -15,6 +46,7 @@ export async function startInferenceWorker(
 	if (runtime.inferenceWorkerStart !== undefined) return runtime.inferenceWorkerStart;
 
 	const worker = factory({
+		...resolvePythonWorkerLaunch(process.env),
 		env: {
 			...process.env,
 			SPEACHY_INFERENCE_WORKERS: String(runtime.config.inferenceWorkers)

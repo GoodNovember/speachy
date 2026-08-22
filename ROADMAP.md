@@ -144,8 +144,8 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
     - [x] Streaming transcription with ordered delta/done events, cooperative cancellation, terminal event-count validation, and accumulated terminal text
     - [x] Speech streaming with canonical Float32 audio events, terminal event-count validation, model-specific voice discovery, and consumer-driven cancellation
     - [x] VAD intentionally remains outside the worker; the in-process `onnxruntime-node` implementation is tracked in Phase 3
-    - [x] Speaker embedding with canonical Float32 vector results and finite-value validation; fixture-verified, with the cache-gated WeSpeaker integration still pending a local model
-    - [x] Diarization with canonical Float32 audio, optional fixed speaker count, semantic timestamped segments, native-runtime main-thread preparation, and cooperative cancellation between returned tracks; fixture-verified, with real-model Pyannote integration still pending a local model
+    - [x] Speaker embedding with canonical Float32 vector results and finite-value validation; fixture-verified and exercised against the cached WeSpeaker model through both the RPC adapter and native HTTP route
+    - [x] Diarization with canonical Float32 audio, optional fixed speaker count, semantic timestamped segments, native-runtime main-thread preparation, and cooperative cancellation between returned tracks; fixture-verified and exercised offline against the cached Pyannote Community-1 pipeline
 - [x] RPC-backed executor implementations in TypeScript
   - [x] Non-streaming Python transcription and translation adapter with request encoding, response validation, cancellation forwarding, and local-model catalog support
   - [x] Complete the Python transcription interface with validated streaming events and consumer-driven cancellation

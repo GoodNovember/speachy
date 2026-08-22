@@ -38,6 +38,8 @@ Inference always runs inside `src/lib/server/executors/worker-pool.ts`. Native i
 
 `src/lib/server/config.ts` reads the same environment variables as the Python server, including pydantic's `WHISPER__COMPUTE_TYPE` nested form and the `UVICORN_HOST` / `UVICORN_PORT` names. Lists accept both the JSON form (`ALLOW_ORIGINS='["*"]'`) and a plain comma-separated list.
 
+During Shape B, the server resolves the repository's `.venv` automatically and starts the inference worker from the repository root so `speaches.inference_worker` is importable in both development and production builds. Set `SPEACHY_PYTHON` to override the Python executable when using a different synced environment.
+
 ## ffmpeg
 
 MP3, Opus, FLAC, and AAC encoding requires an ffmpeg executable. Install ffmpeg through the host operating system or container image and keep it on `PATH`; Linux and macOS therefore use the normal `ffmpeg` command without any platform-specific path. Set `FFMPEG_PATH` when the binary lives elsewhere.
