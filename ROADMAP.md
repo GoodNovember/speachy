@@ -178,10 +178,10 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 
 This is the acceptance surface for the native transcription and diarization endpoints, not a separate demo. It keeps the original audio, raw inference responses, derived alignment, browser permissions, and transient UI state in distinct ownership domains.
 
-- [ ] Add `/workspace` as a dedicated application route, distinct from the stateless `/stt` and `/mic` playgrounds and from the `/v1/*` API surface
-- [ ] Define and validate `speachy.workspace.json` v1 with `kind`, `schemaVersion`, stable workspace `id`, display `name`, and relative `recordingsDirectory` / `analysisDirectory` paths
-  - [ ] Keep absolute paths, permission handles, volatile timestamps, file indexes, caches, and transient UI state out of the manifest
-  - [ ] Reject malformed manifests without mutation; open a workspace with a newer schema read-only instead of overwriting it
+- [x] Add `/workspace` as a dedicated application route, distinct from the stateless `/stt` and `/mic` playgrounds and from the `/v1/*` API surface
+- [x] Define and validate `speachy.workspace.json` v1 with `kind`, `schemaVersion`, stable workspace `id`, display `name`, and relative `recordingsDirectory` / `analysisDirectory` paths
+  - [x] Keep absolute paths, permission handles, volatile timestamps, file indexes, caches, and transient UI state out of the manifest
+  - [x] Reject malformed manifests without mutation; open a workspace with a newer schema read-only instead of overwriting it
 - [ ] Add `Open Audio Workspace` as the direct user gesture for read/write directory selection
   - [ ] If no manifest exists, offer an explicit `Initialize Workspace` action before writing it
   - [ ] Persist the granted directory handle in IndexedDB keyed by workspace ID; query or request permission again when the browser requires it

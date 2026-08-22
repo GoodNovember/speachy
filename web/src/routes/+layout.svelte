@@ -14,6 +14,7 @@
 		{ route: '/tts', label: 'Text to speech' },
 		{ route: '/mic', label: 'Microphone' },
 		{ route: '/chat', label: 'Audio chat' },
+		{ route: '/workspace', label: 'Workspace' },
 		{ route: '/realtime', label: 'Realtime' },
 		{ route: '/models', label: 'Models' }
 	] as const;

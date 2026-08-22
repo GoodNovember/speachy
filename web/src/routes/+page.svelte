@@ -74,6 +74,10 @@
 		<h2>Audio chat</h2>
 		<p>Speak or type to a local LLM and hear the reply spoken back.</p>
 	</a>
+	<a class="card link" href={resolve('/workspace')}>
+		<h2>Audio workspace</h2>
+		<p>Review recordings, transcripts and speaker turns in a portable local project.</p>
+	</a>
 	<a class="card link" href={resolve('/realtime')}>
 		<h2>Realtime console</h2>
 		<p>Live session over the realtime socket, with an inspector for every event both ways.</p>
