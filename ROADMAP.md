@@ -161,12 +161,13 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac
 - [x] Port `text_utils.py` — `SentenceChunker`, `EOFTextChunker`, timestamp/subtitle formatting, `strip_emojis`, `strip_markdown_emphasis`, SSE framing
-- [ ] Implement the HTTP endpoints (see parity table below)
+- [x] Implement the HTTP endpoints (see parity table below)
   - [x] Shared multipart audio decoding (PCM/WAV in-process, cancellable ffmpeg fallback), task-specific executor composition, and the native speaker-embedding route
   - [x] Native diarization route with JSON and RTTM responses, duration and filename semantics, model/decode/error validation, cancellation forwarding, and real cached-model contract parity
   - [x] Native transcription and translation routes with all five response formats, timestamp granularities and word-null semantics, streaming SSE and cancellation, validation/error boundaries, real cached-model contract parity, and shared in-process Silero VAD speech segments
   - [x] Native speech route with incremental PCM/WAV/ffmpeg formatting, PCM16 SSE events, model and voice selection, text cleanup, sample-rate conversion, eager validation before headers, cancellation, and cached Kokoro contract coverage. Missing ffmpeg now fails only the affected stream instead of hanging or terminating the Node server
-- [ ] Repoint the Vitest suite at the SvelteKit server; get green again
+  - [x] Native chat-completions route with input-audio transcription, configured OpenAI-compatible backend forwarding, buffered and streaming text/audio responses, transcript caching, validation, and end-to-end cached-model contract parity
+- [x] Repoint the Vitest suite at the SvelteKit server; 44/44 contract tests pass against the built server in explicit cached-model offline mode
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
 **Done when:** the ported test suite passes against SvelteKit, and the Python process is reachable only through the inference RPC.
@@ -261,7 +262,7 @@ Tick when the endpoint is implemented in SvelteKit and its test passes.
 | `POST /v1/audio/speech/timestamps` | `routers/vad.py`              | [x]  |
 | `POST /v1/audio/speech/embedding`  | `routers/speech_embedding.py` | [x]  |
 | `POST /v1/audio/diarization`       | `routers/diarization.py`      | [x]  |
-| `POST /v1/chat/completions`        | `routers/chat.py`             | [ ]  |
+| `POST /v1/chat/completions`        | `routers/chat.py`             | [x]  |
 | `GET /v1/models`                   | `routers/models.py`           | [x]  |
 | `GET /v1/models/{model_id}`        | `routers/models.py`           | [x]  |
 | `POST /v1/models/{model_id}`       | `routers/models.py`           | [x]  |
