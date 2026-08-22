@@ -27,14 +27,15 @@ class FakeLease:
 
     def __enter__(self) -> object:
         self.manager.loaded_models[self.model_id] = SimpleNamespace(ref_count=1)
-        return object()
+        return self.manager.model
 
     def __exit__(self, *_args: object) -> None:
         self.manager.loaded_models[self.model_id].ref_count = 0
 
 
 class FakeModelManager:
-    def __init__(self) -> None:
+    def __init__(self, model: object | None = None) -> None:
+        self.model = object() if model is None else model
         self.loaded_models: dict[str, Any] = {}
         self.last_transcription_request: Any | None = None
         self.last_translation_request: Any | None = None
@@ -82,6 +83,31 @@ class FakeEvent:
         return self.value
 
 
+class FakeDiarizationPipeline:
+    def __init__(self) -> None:
+        self.last_input: dict[str, Any] | None = None
+        self.last_num_speakers: int | None = None
+
+    def __call__(self, pipeline_input: dict[str, Any], *, num_speakers: int | None = None) -> Any:
+        self.last_input = pipeline_input
+        self.last_num_speakers = num_speakers
+        tracks = [
+            (SimpleNamespace(start=0.25, end=1.5), "track-1", "SPEAKER_00"),
+            (SimpleNamespace(start=1.75, end=2.0), "track-2", "SPEAKER_01"),
+        ]
+        annotation = FakeDiarizationAnnotation(tracks)
+        return SimpleNamespace(speaker_diarization=annotation)
+
+
+class FakeDiarizationAnnotation:
+    def __init__(self, tracks: list[tuple[Any, str, str]]) -> None:
+        self.tracks = tracks
+
+    def itertracks(self, *, yield_label: bool):  # noqa: ANN201
+        assert yield_label
+        return iter(self.tracks)
+
+
 class FakeModelRegistry:
     def __init__(self, model_ids: list[str]) -> None:
         self.model_ids = model_ids
@@ -91,10 +117,10 @@ class FakeModelRegistry:
 
 
 class FakeExecutor:
-    def __init__(self, name: str, task: str, model_ids: list[str]) -> None:
+    def __init__(self, name: str, task: str, model_ids: list[str], model: object | None = None) -> None:
         self.name = name
         self.task = task
-        self.model_manager = FakeModelManager()
+        self.model_manager = FakeModelManager(model)
         self.model_registry = FakeModelRegistry(model_ids)
 
 
@@ -104,9 +130,15 @@ class FakeExecutorRegistry:
         self.parakeet = FakeExecutor("parakeet", "automatic-speech-recognition", ["org/parakeet-tiny"])
         self.kokoro = FakeExecutor("kokoro", "text-to-speech", ["org/kokoro"])
         self.wespeaker = FakeExecutor("wespeaker", "speaker-embedding", ["org/wespeaker"])
+        self.pyannote = FakeExecutor(
+            "pyannote",
+            "speaker-diarization",
+            ["org/pyannote"],
+            FakeDiarizationPipeline(),
+        )
 
     def all_executors(self):  # noqa: ANN201
-        return (self.whisper, self.parakeet, self.kokoro, self.wespeaker)
+        return (self.whisper, self.parakeet, self.kokoro, self.wespeaker, self.pyannote)
 
     @property
     def transcription(self):  # noqa: ANN201
@@ -123,6 +155,10 @@ class FakeExecutorRegistry:
     @property
     def speaker_embedding(self):  # noqa: ANN201
         return (self.wespeaker,)
+
+    @property
+    def diarization(self):  # noqa: ANN201
+        return (self.pyannote,)
 
 
 def context() -> RequestContext:
@@ -333,6 +369,42 @@ def test_speaker_embedding_returns_a_canonical_float32_vector() -> None:
     assert request.audio.sample_rate == 16000
 
 
+def test_diarization_maps_audio_and_optional_speaker_count_to_semantic_segments() -> None:
+    registry = FakeExecutorRegistry()
+    service = InferenceWorkerService(lambda: registry)
+
+    assert service.call(
+        "diarize",
+        {
+            "model_id": "org/pyannote",
+            "audio": transcription_params()["audio"],
+            "num_speakers": 2,
+        },
+        context(),
+    ) == [
+        {"start": 0.25, "end": 1.5, "speaker": "SPEAKER_00"},
+        {"start": 1.75, "end": 2.0, "speaker": "SPEAKER_01"},
+    ]
+    pipeline = registry.pyannote.model_manager.model
+    assert isinstance(pipeline, FakeDiarizationPipeline)
+    assert pipeline.last_num_speakers == 2
+    assert pipeline.last_input is not None
+    assert pipeline.last_input["sample_rate"] == 16000
+    assert tuple(pipeline.last_input["waveform"].shape) == (1, 4)
+
+
+@pytest.mark.parametrize("num_speakers", [0, -1, 1.5, True])
+def test_diarization_rejects_invalid_speaker_counts(num_speakers: Any) -> None:
+    params = {
+        "model_id": "org/pyannote",
+        "audio": transcription_params()["audio"],
+        "num_speakers": num_speakers,
+    }
+    with pytest.raises(RpcMethodError) as caught:
+        InferenceWorkerService(FakeExecutorRegistry).call("diarize", params, context())
+    assert caught.value.code == "invalid_params"
+
+
 @pytest.mark.parametrize(
     ("method", "params", "code"),
     [
@@ -412,6 +484,33 @@ def test_server_prepares_embedding_native_runtime_on_the_main_thread(monkeypatch
     assert runtime_thread is threading.main_thread()
     assert messages[-1]["type"] == "result"
     assert messages[-1]["result"]["length"] == 3
+
+
+def test_server_prepares_diarization_native_runtime_on_the_main_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime_thread: threading.Thread | None = None
+
+    def prepare_native_runtime(method: str) -> None:
+        nonlocal runtime_thread
+        assert method == "diarize"
+        runtime_thread = threading.current_thread()
+
+    monkeypatch.setattr(inference_worker, "_prepare_native_runtime", prepare_native_runtime)
+    request = {
+        "id": 1,
+        "method": "diarize",
+        "params": {"model_id": "org/pyannote", "audio": transcription_params()["audio"]},
+    }
+    requests = BytesIO(f"{json.dumps(request)}\n".encode())
+    responses = BytesIO()
+    server = InferenceRpcServer(InferenceWorkerService(FakeExecutorRegistry))
+    server.run(requests, responses)
+
+    messages = [json.loads(line) for line in responses.getvalue().splitlines()]
+    assert runtime_thread is threading.main_thread()
+    assert messages[-1]["type"] == "result"
+    assert len(messages[-1]["result"]) == 2
 
 
 def test_cancelled_context_stops_before_dispatch() -> None:

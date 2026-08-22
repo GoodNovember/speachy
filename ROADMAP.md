@@ -135,23 +135,23 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
   - [x] `vad_test.py` — integer millisecond timestamps. `speech_embedding_test.py` and `diarization_test.py` still to do; both need models we have not downloaded
   - [x] `text_utils_test.py` (pure functions — ported alongside `text-utils.ts`, including coverage for the previously untested `SentenceChunker` and emoji stripping)
   - [x] `auth_test.py` — the SvelteKit handle factory accepts injected configuration, so enabled and disabled auth are covered without managing a second live process
-- [ ] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
+- [x] Python inference worker: a narrow RPC surface over the existing executors, one method per executor interface method
   - [x] Buffered NDJSON transport and lifecycle methods: `ping`, `list_loaded`, `load_model`, `unload_model`; includes request IDs, structured errors, ordered events, cooperative cancellation, and a TypeScript lifecycle client
   - [x] Lazy shared worker lifecycle in the SvelteKit runtime, including protocol handshake, dev/production shutdown, and native `GET`/`POST`/`DELETE /api/ps` routes
-  - [ ] Executor methods: transcription/translation, speech streaming, speaker embedding, and diarization
+  - [x] Executor methods: transcription/translation, speech streaming, speaker embedding, and diarization
     - [x] Non-streaming transcription with canonical little-endian Float32 audio, semantic JSON results, and lazy main-thread native-runtime initialization
     - [x] Non-streaming translation with Whisper-only executor selection and the shared semantic response codec
     - [x] Streaming transcription with ordered delta/done events, cooperative cancellation, terminal event-count validation, and accumulated terminal text
     - [x] Speech streaming with canonical Float32 audio events, terminal event-count validation, model-specific voice discovery, and consumer-driven cancellation
     - [x] VAD intentionally remains outside the worker; the in-process `onnxruntime-node` implementation is tracked in Phase 3
     - [x] Speaker embedding with canonical Float32 vector results and finite-value validation; fixture-verified, with the cache-gated WeSpeaker integration still pending a local model
-    - [ ] Diarization
-- [ ] RPC-backed executor implementations in TypeScript
+    - [x] Diarization with canonical Float32 audio, optional fixed speaker count, semantic timestamped segments, native-runtime main-thread preparation, and cooperative cancellation between returned tracks; fixture-verified, with real-model Pyannote integration still pending a local model
+- [x] RPC-backed executor implementations in TypeScript
   - [x] Non-streaming Python transcription and translation adapter with request encoding, response validation, cancellation forwarding, and local-model catalog support
   - [x] Complete the Python transcription interface with validated streaming events and consumer-driven cancellation
   - [x] Python speech adapter with validated Float32 chunks, local-model voice lookup, and consumer-driven cancellation
   - [x] Python speaker embedding adapter with binary vector validation, cancellation forwarding, and local-model catalog support
-  - [ ] Add the diarization adapter
+  - [x] Python diarization adapter with validated timestamped segments, optional fixed speaker count, cancellation forwarding, and local-model catalog support
 - [x] Auth as a `handle` hook in `hooks.server.ts`, plus CORS and the `APIProxyError` handler from `main.py`
 - [x] Port `hf_utils.py` and `model_registry.py` using `@huggingface/hub`, including model-card filters, remote enumeration, local cache scanning, recursive file discovery, and guarded single-repository deletion
 - [x] Port `audio.py` — PCM and WAV in-process, cancellable ffmpeg subprocess streaming for mp3, opus, flac, and aac

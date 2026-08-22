@@ -23,7 +23,7 @@ type TimestampGranularity = Literal["segment", "word"]
 
 
 def _prepare_native_runtime(method: str) -> None:
-    if method == "embed":
+    if method in {"diarize", "embed"}:
         # pyannote.audio's native dependency stack can deadlock when its first
         # import happens in the executor thread on Windows.
         import pyannote.audio  # noqa: F401
@@ -73,12 +73,21 @@ class InferenceWorkerService:
         # thread. Preserve a fast ping/list-loaded path, but initialize the
         # shared registry before dispatching the first model operation to the
         # executor thread.
-        if method in {"embed", "load_model", "synthesize", "transcribe", "transcribe_stream", "translate"}:
+        if method in {
+            "diarize",
+            "embed",
+            "load_model",
+            "synthesize",
+            "transcribe",
+            "transcribe_stream",
+            "translate",
+        }:
             _ = self.registry
         _prepare_native_runtime(method)
 
     def call(self, method: str, params: JsonObject, context: RequestContext) -> Any:
         methods: dict[str, Callable[[JsonObject, RequestContext], Any]] = {
+            "diarize": self._diarize,
             "ping": self._ping,
             "embed": self._embed,
             "list_loaded": self._list_loaded,
@@ -306,6 +315,47 @@ class InferenceWorkerService:
         context.raise_if_cancelled()
         return _encode_float32_vector(embedding)
 
+    def _diarize(self, params: JsonObject, context: RequestContext) -> list[JsonObject]:
+        import torch
+
+        model_id = _required_string(params, "model_id")
+        audio = _decode_audio(_required_object(params, "audio"))
+        num_speakers = _optional_positive_integer(params, "num_speakers")
+
+        executor = self._find_local_executor(model_id, tuple(self.registry.diarization), context)
+        context.raise_if_cancelled()
+        with executor.model_manager.load_model(model_id) as pipeline:
+            # The RPC decoder views immutable base64 bytes. PyTorch warns (and
+            # permits undefined writes) when wrapping that read-only buffer.
+            waveform = torch.from_numpy(audio.data.copy()).unsqueeze(0).float()
+            pipeline_input = {"waveform": waveform, "sample_rate": audio.sample_rate}
+            if num_speakers is None:
+                diarization = pipeline(pipeline_input)
+            else:
+                diarization = pipeline(pipeline_input, num_speakers=num_speakers)
+
+        segments: list[JsonObject] = []
+        try:
+            tracks = diarization.speaker_diarization.itertracks(yield_label=True)
+        except (AttributeError, TypeError) as error:
+            raise RpcMethodError(
+                "invalid_worker_response", "Diarization pipeline returned an invalid result"
+            ) from error
+        for turn, _track, speaker in tracks:
+            context.raise_if_cancelled()
+            try:
+                start = float(turn.start)
+                end = float(turn.end)
+            except (AttributeError, TypeError, ValueError, OverflowError) as error:
+                raise RpcMethodError(
+                    "invalid_worker_response", "Diarization pipeline returned invalid timestamps"
+                ) from error
+            if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end < start:
+                raise RpcMethodError("invalid_worker_response", "Diarization pipeline returned invalid timestamps")
+            segments.append({"start": start, "end": end, "speaker": str(speaker)})
+        context.raise_if_cancelled()
+        return segments
+
     @staticmethod
     def _find_local_executor(model_id: str, executors: tuple[Any, ...], context: RequestContext) -> Any:
         for executor in executors:
@@ -348,6 +398,15 @@ def _required_bool(params: JsonObject, key: str) -> bool:
     value = params.get(key)
     if not isinstance(value, bool):
         raise RpcMethodError("invalid_params", f"'{key}' must be a boolean")
+    return value
+
+
+def _optional_positive_integer(params: JsonObject, key: str) -> int | None:
+    value = params.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise RpcMethodError("invalid_params", f"'{key}' must be a positive integer or null")
     return value
 
 
