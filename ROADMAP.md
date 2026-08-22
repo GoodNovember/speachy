@@ -45,6 +45,8 @@ Locked decisions. Add to this as open questions resolve.
 - **SvelteKit's CSRF protection must stay off.** It rejects cross-site POSTs carrying form content types, which is exactly how `/v1/audio/transcriptions` is called. Every non-browser client — the OpenAI SDK, curl, the ported pytest suite — sends multipart with no matching `Origin` and gets a 403. Safe to disable here only because the API authenticates with an `Authorization` header and never cookies, so there is no ambient authority for CSRF to abuse. **If cookie or session auth is ever added, this must be revisited.** Found in the production build; the dev server did not surface it.
 - **The Shape B Python worker uses buffered NDJSON over stdio.** It is a local child process, so a separate HTTP server adds ports, authentication, firewall behaviour, and deployment surface without buying isolation. Protocol v1 has request IDs, terminal results, structured errors, ordered streaming events, and explicit cooperative-cancellation messages. `src/speaches/inference_worker.py` owns the Python side; `web/src/lib/server/executors/python-worker.ts` owns process lifecycle and framing in Node.
 - **Known-speaker diarization mapping remains reference-only for now.** The generic diarization executor returns timestamped speaker labels and supports an optional fixed speaker count. The Python HTTP route's `known_speaker_names[]` / `known_speaker_references[]` feature reaches through Pyannote's private embedding internals and has no pytest contract coverage. The native route returns an explicit 501 for those fields instead of silently ignoring them; preserving or dropping that extension is a separate compatibility decision.
+- **An audio workspace is a user-selected, explicitly initialized directory.** The `Open Audio Workspace` button directly invokes `showDirectoryPicker({ mode: 'readwrite' })`; a root `speachy.workspace.json` file blesses the directory. Chromium gets read/write workspace support, while unsupported browsers degrade to read-only folder selection plus explicit downloads. Browser permission handles remain in IndexedDB and never enter the portable workspace.
+- **Workspace identity, artifacts, browser state, and cache have separate owners.** `speachy.workspace.json` contains only versioned workspace identity and stable relative-path preferences. Audio and analysis files are portable reviewed artifacts. Directory permissions and last-open state are browser-local. Playhead and panel state are transient. Rebuildable waveform data is cache, not canonical workspace state.
 
 ### Open questions
 
@@ -165,6 +167,35 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 - [ ] Repoint the Phase 1 playground at the SvelteKit server
 
 **Done when:** the ported test suite passes against SvelteKit, and the Python process is reachable only through the inference RPC.
+
+---
+
+## Phase 2.5 — Audio workspace and inspection rig
+
+This is the acceptance surface for the native transcription and diarization endpoints, not a separate demo. It keeps the original audio, raw inference responses, derived alignment, browser permissions, and transient UI state in distinct ownership domains.
+
+- [ ] Define and validate `speachy.workspace.json` v1 with `kind`, `schemaVersion`, stable workspace `id`, display `name`, and relative `recordingsDirectory` / `analysisDirectory` paths
+  - [ ] Keep absolute paths, permission handles, volatile timestamps, file indexes, caches, and transient UI state out of the manifest
+  - [ ] Reject malformed manifests without mutation; open a workspace with a newer schema read-only instead of overwriting it
+- [ ] Add `Open Audio Workspace` as the direct user gesture for read/write directory selection
+  - [ ] If no manifest exists, offer an explicit `Initialize Workspace` action before writing it
+  - [ ] Persist the granted directory handle in IndexedDB keyed by workspace ID; query or request permission again when the browser requires it
+  - [ ] Feature-detect `showDirectoryPicker`; fall back to read-only directory input and downloadable recordings/artifacts where directory writes are unavailable
+- [ ] Enumerate supported audio files and expose explicit refresh, selected-file, unprocessed, ready, stale, and failed states without requiring a filesystem watcher
+- [ ] Build the inspection timeline fixture-first, then connect it to the same-origin APIs
+  - [ ] Browser-decoded waveform and native audio playback share one seekable playhead
+  - [ ] Transcription segments and words align horizontally by timestamp
+  - [ ] Diarization renders one lane per speaker so overlaps remain visible; speaker labels map deterministically into a small accessible palette and remain visible as text
+  - [ ] Clicking a word seeks to it; clicking a speaker turn selects or loops that interval
+  - [ ] Surface gaps, overlaps, out-of-range timestamps, duration mismatches, and words crossing speaker boundaries without rewriting the source responses
+- [ ] Derive word-to-speaker assignments by temporal overlap while preserving transcription and diarization responses unchanged; mark ambiguous boundary cases explicitly
+- [ ] Record mono PCM WAV into the configured recordings directory using collision-safe timestamped filenames, then select it and optionally analyze it
+- [ ] Write versioned analysis artifacts into the configured analysis directory
+  - [ ] Preserve raw transcription and diarization payloads as canonical results
+  - [ ] Store derived alignment and diagnostics separately from those payloads
+  - [ ] Record audio filename, size, modification time, duration, content hash, model IDs, and analysis time so stale results are detectable and runs are reproducible
+
+**Done when:** a user can initialize or reopen a portable workspace, inspect existing audio, record a new WAV into it, run transcription and diarization, review their shared timeline, and reopen the generated artifacts without any server-side database.
 
 ---
 
@@ -292,4 +323,4 @@ Named so they do not quietly creep in.
 - New models or new tasks beyond what the executor registry already covers.
 - OpenTelemetry instrumentation, until Phase 3 is stable. The Python side has fourteen OTel packages; the port should not inherit that surface area before the core works.
 - The `speaches-cli` package.
-- Multi-tenancy, persistence, or a database. Sessions stay in memory, as they are today.
+- Multi-tenancy or server-side database persistence. Phase 2.5 local workspace files are deliberately in scope; inference sessions stay in memory, as they are today.
