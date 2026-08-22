@@ -5,7 +5,8 @@ import type {
 	Transcription,
 	TranscriptionEvent,
 	TranscriptionExecutor,
-	TranscriptionRequest
+	TranscriptionRequest,
+	VadExecutor
 } from '$lib/server/executors/types';
 import { _transcriptionResponse } from './+server.ts';
 
@@ -23,6 +24,17 @@ function executor(overrides: Partial<TranscriptionExecutor> = {}): Transcription
 			yield { type: 'done', text: ' Hello, world.' };
 		},
 		...overrides
+	};
+}
+
+function vadExecutor(detectSpeech: VadExecutor['detectSpeech']): VadExecutor {
+	return {
+		name: 'fixture-vad',
+		task: 'voice-activity-detection',
+		listLocalModels: async () => [],
+		listRemoteModels: async () => [],
+		canHandle: async () => true,
+		detectSpeech
 	};
 }
 
@@ -118,6 +130,22 @@ describe('POST /v1/audio/transcriptions', () => {
 			segments: [{ id: 0, start: 0.1, end: 1.5, text: ' Hello, world.' }],
 			words: null
 		});
+	});
+
+	it('passes shared in-process VAD segments to transcription', async () => {
+		const transcribe = vi.fn(async (_request: TranscriptionRequest): Promise<Transcription> => ({
+			text: 'Speech only.'
+		}));
+		const detectSpeech = vi.fn(async () => [{ start: 800, end: 12_800 }]);
+		await _transcriptionResponse(
+			transcriptionForm(),
+			new AbortController().signal,
+			[executor({ transcribe })],
+			decodedAudio,
+			vadExecutor(detectSpeech)
+		);
+		expect(detectSpeech).toHaveBeenCalledOnce();
+		expect(transcribe.mock.calls[0]![0].speechSegments).toEqual([{ start: 800, end: 12_800 }]);
 	});
 
 	it.each([

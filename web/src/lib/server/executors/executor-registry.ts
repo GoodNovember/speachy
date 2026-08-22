@@ -3,14 +3,18 @@ import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
 import { PythonSpeechExecutor } from './python-speech.ts';
 import { PythonTranscriptionExecutor } from './python-transcription.ts';
+import { SileroVadExecutor } from './silero-vad.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
 import type {
 	DiarizationExecutor,
 	ExecutorBase,
 	SpeakerEmbeddingExecutor,
 	SpeechExecutor,
-	TranscriptionExecutor
+	TranscriptionExecutor,
+	VadExecutor
 } from './types.ts';
+
+const nativeVadExecutor = new SileroVadExecutor();
 
 const lazyPythonWorker = {
 	async request(
@@ -53,4 +57,8 @@ export function getTranslationExecutors(): readonly TranscriptionExecutor[] {
 
 export function getSpeechExecutors(): readonly SpeechExecutor[] {
 	return [new PythonSpeechExecutor(lazyPythonWorker)];
+}
+
+export function getVadExecutor(): VadExecutor {
+	return nativeVadExecutor;
 }

@@ -3,7 +3,7 @@ import {
 	createTranscriptionResponse,
 	invalidMultipartResponse
 } from '$lib/server/transcription-http';
-import { getTranscriptionExecutors } from '$lib/server/executors/executor-registry';
+import { getTranscriptionExecutors, getVadExecutor } from '$lib/server/executors/executor-registry';
 
 export { createTranscriptionResponse as _transcriptionResponse } from '$lib/server/transcription-http';
 
@@ -14,5 +14,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	} catch {
 		return invalidMultipartResponse();
 	}
-	return createTranscriptionResponse(form, request.signal, getTranscriptionExecutors());
+	return createTranscriptionResponse(
+		form,
+		request.signal,
+		getTranscriptionExecutors(),
+		undefined,
+		getVadExecutor()
+	);
 };

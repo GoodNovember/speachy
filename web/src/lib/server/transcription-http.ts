@@ -1,6 +1,7 @@
 import { AudioDecodeError, decodeAudioUpload } from './audio-decode.ts';
 import { APIProxyError } from './errors.ts';
 import { findExecutorForModel } from './executors/executor-registry.ts';
+import { SILERO_VAD_MODEL_ID } from './executors/silero-vad.ts';
 import type {
 	Audio,
 	ResponseFormat,
@@ -9,6 +10,7 @@ import type {
 	TranscriptionExecutor,
 	TranscriptionRequest,
 	TranslationRequest,
+	VadExecutor,
 	VadOptions
 } from './executors/types.ts';
 import { formatAsSse } from './text-utils.ts';
@@ -19,9 +21,7 @@ type Parsed<T> = { ok: true; value: T } | { ok: false; response: Response };
 const RESPONSE_FORMATS: readonly ResponseFormat[] = ['json', 'text', 'verbose_json', 'srt', 'vtt'];
 const TIMESTAMP_COMBINATIONS = new Set(['segment', 'word', 'word,segment', 'segment,word']);
 
-// This matches the Python route's faster-whisper defaults. Until Phase 3's
-// in-process VAD lands, the decoded upload is deliberately passed as one
-// speech segment so this route does not take ownership of a second VAD path.
+// This matches the Python route's faster-whisper defaults.
 const DEFAULT_VAD_OPTIONS: VadOptions = {
 	threshold: 0.5,
 	minSpeechDurationMs: 0,
@@ -137,6 +137,22 @@ function audioSegments(audio: Audio): [{ start: number; end: number }] {
 	return [{ start: 0, end: audio.data.length }];
 }
 
+async function detectSpeechSegments(
+	audio: Audio,
+	signal: AbortSignal,
+	vadExecutor?: VadExecutor
+): Promise<{ start: number; end: number }[]> {
+	if (vadExecutor === undefined) return audioSegments(audio);
+	return vadExecutor.detectSpeech(
+		{
+			audio,
+			modelId: SILERO_VAD_MODEL_ID,
+			vadOptions: DEFAULT_VAD_OPTIONS
+		},
+		signal
+	);
+}
+
 function inferenceResponse(result: Transcription, format: ResponseFormat): Response {
 	switch (format) {
 		case 'text':
@@ -238,7 +254,8 @@ export async function createTranscriptionResponse(
 	signal: AbortSignal,
 	executors: readonly TranscriptionExecutor[],
 	audioDecoder: AudioDecoder = (file, requestSignal) =>
-		decodeAudioUpload(file, { signal: requestSignal })
+		decodeAudioUpload(file, { signal: requestSignal }),
+	vadExecutor?: VadExecutor
 ): Promise<Response> {
 	const model = requiredString(form, 'model');
 	if (!model.ok) return model.response;
@@ -261,6 +278,7 @@ export async function createTranscriptionResponse(
 	}
 	const decoded = await decode(file.value, signal, audioDecoder);
 	if (!decoded.ok) return decoded.response;
+	const speechSegments = await detectSpeechSegments(decoded.value, signal, vadExecutor);
 	const request: TranscriptionRequest = {
 		audio: decoded.value,
 		model: model.value,
@@ -269,7 +287,7 @@ export async function createTranscriptionResponse(
 		responseFormat: format.value,
 		temperature: temperature.value,
 		timestampGranularities: granularities.value,
-		speechSegments: audioSegments(decoded.value),
+		speechSegments,
 		vadOptions: DEFAULT_VAD_OPTIONS,
 		hotwords: optionalString(form, 'hotwords'),
 		withoutTimestamps: withoutTimestamps.value
@@ -292,7 +310,8 @@ export async function createTranslationResponse(
 	signal: AbortSignal,
 	executors: readonly TranscriptionExecutor[],
 	audioDecoder: AudioDecoder = (file, requestSignal) =>
-		decodeAudioUpload(file, { signal: requestSignal })
+		decodeAudioUpload(file, { signal: requestSignal }),
+	vadExecutor?: VadExecutor
 ): Promise<Response> {
 	const model = requiredString(form, 'model');
 	if (!model.ok) return model.response;
@@ -309,13 +328,14 @@ export async function createTranslationResponse(
 	}
 	const decoded = await decode(file.value, signal, audioDecoder);
 	if (!decoded.ok) return decoded.response;
+	const speechSegments = await detectSpeechSegments(decoded.value, signal, vadExecutor);
 	const request: TranslationRequest = {
 		audio: decoded.value,
 		model: model.value,
 		prompt: optionalString(form, 'prompt'),
 		responseFormat: format.value,
 		temperature: temperature.value,
-		speechSegments: audioSegments(decoded.value),
+		speechSegments,
 		vadOptions: DEFAULT_VAD_OPTIONS
 	};
 
