@@ -21,8 +21,8 @@ import {
 import { ApiError, errorFromResponse } from './errors';
 import { parseSseJson } from './sse';
 
-// Same-origin by design: /v1/* is proxied to the reference in Phase 1 and
-// served directly in Phase 2, so nothing here changes when the backend swaps.
+// Same-origin by design: every HTTP endpoint used by the playground is served
+// directly by SvelteKit. The realtime WebSocket has its own Phase 3 boundary.
 
 export type ClientOptions = {
 	apiKey?: string;

@@ -1,10 +1,9 @@
 import type { RequestHandler } from './$types';
-import { proxyToReference } from '$lib/server/proxy';
+import { apiNotFoundResponse } from '$lib/server/http-not-found';
 
-// Covers any remaining Python /api routes. /api/ps is native now and wins as
-// the more specific SvelteKit route.
-const handler: RequestHandler = ({ request, params }) =>
-	proxyToReference(request, `/api/${params.path}`);
+// Native /api routes are explicit. Keep the compatibility error shape without
+// falling through to the Python reference process.
+const handler: RequestHandler = () => apiNotFoundResponse();
 
 export const GET = handler;
 export const POST = handler;

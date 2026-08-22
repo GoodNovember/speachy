@@ -1,10 +1,9 @@
 import type { RequestHandler } from './$types';
-import { proxyToReference } from '$lib/server/proxy';
+import { apiNotFoundResponse } from '$lib/server/http-not-found';
 
-// Phase 1: forwards to the Python reference. In Phase 2 these paths get real
-// handlers one at a time, and the UI does not change.
-const handler: RequestHandler = ({ request, params }) =>
-	proxyToReference(request, `/v1/${params.path}`);
+// The Phase 1 HTTP proxy is intentionally gone. Unknown compatibility paths
+// must fail here rather than silently reaching around the native API surface.
+const handler: RequestHandler = () => apiNotFoundResponse();
 
 export const GET = handler;
 export const POST = handler;

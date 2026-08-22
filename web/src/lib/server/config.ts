@@ -96,9 +96,8 @@ export const configSchema = z.object({
 	chatCompletionBaseUrl: z.string().url().default('http://localhost:11434/v1'),
 	chatCompletionApiKey: z.string().default('cant-be-empty'),
 
-	// Phase 1 only. The app proxies /v1/* here so the browser talks to one
-	// origin and the UI is written against the paths our own server will serve
-	// in Phase 2. Each proxied route gets replaced by a real handler in place.
+	// Temporary Phase 3 seam: only /v1/realtime still reaches the Python
+	// reference. Native HTTP handlers do not use this address.
 	referenceBaseUrl: z.string().url().default('http://127.0.0.1:8001'),
 
 	preloadModels: envStringList.default([]),

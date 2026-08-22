@@ -19,10 +19,9 @@ export type UpgradableServer = {
 
 let wss: WebSocketServer | undefined;
 
-// Phase 1: pipes the socket to the Python reference, matching what the HTTP
-// proxy does for /v1/*, so the browser only ever talks to one origin. Phase 3
-// replaces the body of handleConnection with the real session implementation
-// and this file stops being a proxy.
+// This WebSocket is the final reference-server bridge. Phase 3 replaces the
+// body of handleConnection with the native session implementation and removes
+// referenceBaseUrl entirely.
 export function attachRealtimeServer(server: UpgradableServer): void {
 	if (wss !== undefined) return;
 	wss = new WebSocketServer({ noServer: true });

@@ -32,14 +32,14 @@
 
 <h1>speachy</h1>
 <p>
-	The SvelteKit port. During Phase 1 this app proxies <code>/v1/*</code> to the Python reference
-	server, so the pages are written against the same paths our own server will serve later. See
-	<code>ROADMAP.md</code> for where this is going.
+	The native SvelteKit control plane. The playground uses the same OpenAI-compatible HTTP routes as
+	external clients; Python is now isolated behind the inference worker. See <code>ROADMAP.md</code> for
+	where this is going.
 </p>
 
 <section class="card status" data-status={status}>
 	<div>
-		<h2>Reference server</h2>
+		<h2>Native server</h2>
 		{#if status === 'checking'}
 			<p class="muted">Checking...</p>
 		{:else if status === 'up'}
