@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	createWorkspaceManifest,
 	inspectWorkspaceManifest,
+	inspectWorkspaceManifestText,
 	WORKSPACE_KIND,
 	WORKSPACE_MANIFEST_FILENAME,
 	WORKSPACE_SCHEMA_VERSION,
@@ -79,5 +81,22 @@ describe(WORKSPACE_MANIFEST_FILENAME, () => {
 	it('does not mistake another JSON file for a Speachy workspace', () => {
 		const result = inspectWorkspaceManifest({ ...validManifest, kind: 'another-application' });
 		expect(result.status).toBe('invalid');
+	});
+
+	it('reports malformed JSON as an invalid manifest', () => {
+		const result = inspectWorkspaceManifestText('{"kind":');
+		expect(result.status).toBe('invalid');
+		if (result.status === 'invalid') expect(result.issues[0]?.path).toEqual([]);
+	});
+
+	it('creates a validated manifest with stable default directories', () => {
+		expect(createWorkspaceManifest('Field interviews', validManifest.id)).toEqual({
+			kind: WORKSPACE_KIND,
+			schemaVersion: WORKSPACE_SCHEMA_VERSION,
+			id: validManifest.id,
+			name: 'Field interviews',
+			recordingsDirectory: 'recordings',
+			analysisDirectory: 'analysis'
+		});
 	});
 });

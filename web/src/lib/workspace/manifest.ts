@@ -95,3 +95,34 @@ export function inspectWorkspaceManifest(input: unknown): WorkspaceManifestInspe
 	if (!manifest.success) return invalidInspection(manifest.error);
 	return { status: 'ready', access: 'read-write', manifest: manifest.data };
 }
+
+export function inspectWorkspaceManifestText(text: string): WorkspaceManifestInspection {
+	try {
+		return inspectWorkspaceManifest(JSON.parse(text));
+	} catch (error) {
+		return {
+			status: 'invalid',
+			access: 'none',
+			issues: [
+				{
+					path: [],
+					message: error instanceof SyntaxError ? error.message : 'Manifest is not valid JSON'
+				}
+			]
+		};
+	}
+}
+
+export function createWorkspaceManifest(
+	name: string,
+	id: string = crypto.randomUUID()
+): WorkspaceManifestV1 {
+	return workspaceManifestV1Schema.parse({
+		kind: WORKSPACE_KIND,
+		schemaVersion: WORKSPACE_SCHEMA_VERSION,
+		id,
+		name,
+		recordingsDirectory: 'recordings',
+		analysisDirectory: 'analysis'
+	});
+}
