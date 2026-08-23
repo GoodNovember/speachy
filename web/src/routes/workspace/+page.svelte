@@ -17,8 +17,23 @@
 		type WorkspaceManifestInspection,
 		type WorkspaceManifestV1
 	} from '$lib/workspace/manifest';
+	import {
+		enumerateWorkspaceAudioFiles,
+		enumerateWorkspaceAudioFilesFromFolderFiles,
+		reconcileWorkspaceAudioFiles,
+		type WorkspaceAudioFile,
+		type WorkspaceAudioStatus
+	} from '$lib/workspace/inventory';
 
 	type DirectoryPicker = (options: { mode: 'readwrite' }) => Promise<PermissionedDirectoryHandle>;
+	type WorkspaceSource =
+		| { kind: 'handle'; handle: PermissionedDirectoryHandle }
+		| { kind: 'folder-files'; files: File[] };
+	type AudioInventory =
+		| { status: 'idle' }
+		| { status: 'loading' }
+		| { status: 'ready'; files: WorkspaceAudioFile[] }
+		| { status: 'failed'; message: string };
 
 	type WorkspaceView =
 		| { status: 'idle' }
@@ -47,6 +62,16 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let notice = $state<string | null>(null);
+	let workspaceSource = $state<WorkspaceSource | null>(null);
+	let audioInventory = $state<AudioInventory>({ status: 'idle' });
+	let selectedAudioPath = $state<string | null>(null);
+	let inventoryRequest = 0;
+
+	const selectedAudio = $derived(
+		audioInventory.status === 'ready'
+			? (audioInventory.files.find((file) => file.relativePath === selectedAudioPath) ?? null)
+			: null
+	);
 
 	const stateLabel = $derived.by(() => {
 		switch (view.status) {
@@ -86,6 +111,62 @@
 		notice = null;
 	}
 
+	function resetInventory(): void {
+		inventoryRequest += 1;
+		workspaceSource = null;
+		audioInventory = { status: 'idle' };
+		selectedAudioPath = null;
+	}
+
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+		return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+	}
+
+	function formatModified(timestamp: number): string {
+		return timestamp > 0 ? new Date(timestamp).toLocaleString() : 'Modification time unavailable';
+	}
+
+	function analysisLabel(analysis: WorkspaceAudioStatus): string {
+		switch (analysis.status) {
+			case 'ready':
+				return 'Ready';
+			case 'stale':
+				return 'Stale';
+			case 'failed':
+				return 'Failed';
+			default:
+				return 'Unprocessed';
+		}
+	}
+
+	async function refreshAudioFiles(
+		manifest: WorkspaceManifestV1 | undefined = view.status === 'ready' ? view.manifest : undefined,
+		source: WorkspaceSource | null = workspaceSource
+	): Promise<void> {
+		if (manifest === undefined || source === null) return;
+		const request = ++inventoryRequest;
+		const previous = audioInventory.status === 'ready' ? audioInventory.files : [];
+		audioInventory = { status: 'loading' };
+		try {
+			const discovered =
+				source.kind === 'handle'
+					? await enumerateWorkspaceAudioFiles(source.handle, manifest.recordingsDirectory)
+					: enumerateWorkspaceAudioFilesFromFolderFiles(source.files, manifest.recordingsDirectory);
+			if (request !== inventoryRequest) return;
+			const files = reconcileWorkspaceAudioFiles(discovered, previous);
+			audioInventory = { status: 'ready', files };
+			if (!files.some((file) => file.relativePath === selectedAudioPath)) {
+				selectedAudioPath = null;
+			}
+		} catch (inventoryError) {
+			if (request !== inventoryRequest) return;
+			audioInventory = { status: 'failed', message: message(inventoryError) };
+		}
+	}
+
 	async function remember(manifest: WorkspaceManifestV1, handle: PermissionedDirectoryHandle) {
 		try {
 			await rememberWorkspaceHandle(manifest.id, handle);
@@ -97,22 +178,26 @@
 	async function applyInspection(
 		inspection: WorkspaceManifestInspection,
 		directoryName: string,
-		handle?: PermissionedDirectoryHandle
+		source?: WorkspaceSource
 	): Promise<void> {
 		switch (inspection.status) {
 			case 'ready':
+				workspaceSource = source ?? null;
 				view = {
 					status: 'ready',
 					directoryName,
-					access: handle === undefined ? 'read-only' : 'read-write',
+					access: source?.kind === 'handle' ? 'read-write' : 'read-only',
 					manifest: inspection.manifest
 				};
-				if (handle !== undefined) await remember(inspection.manifest, handle);
+				if (source?.kind === 'handle') await remember(inspection.manifest, source.handle);
+				await refreshAudioFiles(inspection.manifest, source ?? null);
 				break;
 			case 'newer-schema':
+				resetInventory();
 				view = { status: 'newer-schema', directoryName, schemaVersion: inspection.schemaVersion };
 				break;
 			case 'invalid':
+				resetInventory();
 				view = { status: 'invalid', directoryName, issues: inspection.issues };
 				break;
 		}
@@ -121,18 +206,23 @@
 	async function applyRead(
 		read: WorkspaceManifestRead,
 		directoryName: string,
-		handle?: PermissionedDirectoryHandle
+		source?: WorkspaceSource
 	): Promise<void> {
 		if (read.status === 'missing') {
-			view = { status: 'uninitialized', directoryName, handle };
+			resetInventory();
+			view = {
+				status: 'uninitialized',
+				directoryName,
+				handle: source?.kind === 'handle' ? source.handle : undefined
+			};
 			workspaceName = directoryName;
 			return;
 		}
-		await applyInspection(read.inspection, directoryName, handle);
+		await applyInspection(read.inspection, directoryName, source);
 	}
 
 	async function openHandle(handle: PermissionedDirectoryHandle): Promise<void> {
-		await applyRead(await readWorkspaceManifest(handle), handle.name, handle);
+		await applyRead(await readWorkspaceManifest(handle), handle.name, { kind: 'handle', handle });
 	}
 
 	async function restoreLastWorkspace(): Promise<void> {
@@ -193,8 +283,10 @@
 		const { handle, directoryName } = view;
 		try {
 			const manifest = await initializeWorkspaceDirectory(handle, workspaceName);
+			workspaceSource = { kind: 'handle', handle };
 			view = { status: 'ready', directoryName, access: 'read-write', manifest };
 			await remember(manifest, handle);
+			await refreshAudioFiles(manifest, workspaceSource);
 		} catch (initializeError) {
 			error = message(initializeError);
 		} finally {
@@ -208,8 +300,12 @@
 		busy = true;
 		clearFeedback();
 		try {
-			const selected = readWorkspaceManifestFromFolderFiles(input.files);
-			await applyRead(await selected.read, selected.directoryName);
+			const files = [...input.files];
+			const selected = readWorkspaceManifestFromFolderFiles(files);
+			await applyRead(await selected.read, selected.directoryName, {
+				kind: 'folder-files',
+				files
+			});
 		} catch (fallbackError) {
 			error = message(fallbackError);
 		} finally {
@@ -360,6 +456,111 @@
 				<dd>{view.manifest.analysisDirectory}</dd>
 			</div>
 		</dl>
+	</section>
+
+	<section class="card audio-library">
+		<div class="library-heading">
+			<div>
+				<p class="step">02 / Choose a recording</p>
+				<h2>Audio inventory</h2>
+			</div>
+			<button
+				class="secondary"
+				onclick={() => refreshAudioFiles()}
+				disabled={audioInventory.status === 'loading'}
+			>
+				{audioInventory.status === 'loading' ? 'Refreshing...' : 'Refresh files'}
+			</button>
+		</div>
+
+		{#if audioInventory.status === 'idle' || audioInventory.status === 'loading'}
+			<p class="inventory-message" aria-live="polite">Reading supported audio files...</p>
+		{:else if audioInventory.status === 'failed'}
+			<div class="inventory-failure" role="alert">
+				<strong>File refresh failed</strong>
+				<p>{audioInventory.message}</p>
+			</div>
+		{:else if audioInventory.files.length === 0}
+			<div class="inventory-empty">
+				<strong>No supported audio found</strong>
+				<p>
+					Add WAV, MP3, M4A, MP4, MPEG, MPGA, OGG, Opus, FLAC, AAC, or WebM files under
+					<code>{view.manifest.recordingsDirectory}/</code>, then refresh.
+				</p>
+			</div>
+		{:else}
+			<div class="audio-browser">
+				<div>
+					<p class="inventory-count">
+						{audioInventory.files.length} recording{audioInventory.files.length === 1 ? '' : 's'}
+					</p>
+					<ul class="audio-list" aria-label="Workspace recordings">
+						{#each audioInventory.files as audio (audio.relativePath)}
+							<li>
+								<button
+									class:selected={selectedAudioPath === audio.relativePath}
+									aria-pressed={selectedAudioPath === audio.relativePath}
+									onclick={() => (selectedAudioPath = audio.relativePath)}
+								>
+									<span class="audio-name">{audio.name}</span>
+									<span class="audio-path">{audio.relativePath}</span>
+									<span class="audio-row-meta">
+										<span>{formatBytes(audio.size)}</span>
+										<span class="analysis-state" data-status={audio.analysis.status}>
+											{analysisLabel(audio.analysis)}
+										</span>
+									</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				</div>
+
+				<aside class="audio-selection" aria-live="polite">
+					{#if selectedAudio === null}
+						<p class="step">Selected file</p>
+						<h3>No recording selected</h3>
+						<p>Choose a recording to inspect its source identity and analysis state.</p>
+					{:else}
+						<p class="step">Selected file</p>
+						<h3>{selectedAudio.name}</h3>
+						<dl class="selection-facts">
+							<div>
+								<dt>Path</dt>
+								<dd>{selectedAudio.relativePath}</dd>
+							</div>
+							<div>
+								<dt>Size</dt>
+								<dd>{formatBytes(selectedAudio.size)}</dd>
+							</div>
+							<div>
+								<dt>Modified</dt>
+								<dd>{formatModified(selectedAudio.lastModified)}</dd>
+							</div>
+							<div>
+								<dt>Analysis</dt>
+								<dd>{analysisLabel(selectedAudio.analysis)}</dd>
+							</div>
+						</dl>
+
+						{#if selectedAudio.analysis.status === 'unprocessed'}
+							<p class="analysis-copy">
+								No analysis is associated with this source file yet. The upcoming timeline slice
+								will consume this selected-file boundary.
+							</p>
+						{:else if selectedAudio.analysis.status === 'ready'}
+							<p class="analysis-copy">
+								Analysis is current as of {selectedAudio.analysis.analyzedAt}.
+							</p>
+						{:else if selectedAudio.analysis.status === 'stale'}
+							<p class="analysis-copy warning-copy">{selectedAudio.analysis.reason}</p>
+						{:else}
+							<p class="analysis-copy error-copy">{selectedAudio.analysis.message}</p>
+						{/if}
+					{/if}
+				</aside>
+			</div>
+		{/if}
 	</section>
 {:else if view.status === 'newer-schema'}
 	<section class="card result warning">
@@ -574,6 +775,175 @@
 		gap: 0 1.2rem;
 	}
 
+	.audio-library {
+		margin-top: 1rem;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.library-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem 1.1rem;
+		border-bottom: 1px solid var(--rule);
+	}
+
+	.library-heading h2,
+	.audio-selection h3 {
+		margin: 0;
+	}
+
+	.secondary {
+		background: transparent;
+		color: var(--accent-ink);
+	}
+
+	.inventory-message,
+	.inventory-empty,
+	.inventory-failure {
+		margin: 0;
+		padding: 1.2rem 1.1rem;
+	}
+
+	.inventory-empty p,
+	.inventory-failure p {
+		margin: 0.35rem 0 0;
+	}
+
+	.inventory-failure {
+		border-left: 3px solid var(--danger);
+		color: var(--danger);
+	}
+
+	.audio-browser {
+		display: grid;
+		grid-template-columns: minmax(17rem, 1fr) minmax(18rem, 0.9fr);
+		min-height: 20rem;
+	}
+
+	.audio-browser > div {
+		min-width: 0;
+		border-right: 1px solid var(--rule);
+	}
+
+	.inventory-count {
+		margin: 0;
+		padding: 0.6rem 0.8rem;
+		border-bottom: 1px solid var(--rule);
+		font-family: var(--mono);
+		font-size: 0.72rem;
+		color: var(--ink-3);
+	}
+
+	.audio-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		max-height: 27rem;
+		overflow: auto;
+	}
+
+	.audio-list li + li {
+		border-top: 1px solid var(--rule);
+	}
+
+	.audio-list button {
+		display: grid;
+		width: 100%;
+		gap: 0.18rem;
+		padding: 0.7rem 0.8rem;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+	}
+
+	.audio-list button:hover,
+	.audio-list button.selected {
+		background: var(--accent-wash);
+	}
+
+	.audio-list button.selected {
+		box-shadow: inset 3px 0 var(--accent);
+	}
+
+	.audio-name {
+		font-weight: 650;
+	}
+
+	.audio-path {
+		overflow: hidden;
+		font-family: var(--mono);
+		font-size: 0.7rem;
+		color: var(--ink-3);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.audio-row-meta {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+		font-family: var(--mono);
+		font-size: 0.68rem;
+		color: var(--ink-3);
+	}
+
+	.analysis-state {
+		border: 1px solid var(--rule);
+		border-radius: 999px;
+		padding: 0.08rem 0.42rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.analysis-state[data-status='ready'] {
+		border-color: var(--accent);
+		color: var(--accent-ink);
+	}
+
+	.analysis-state[data-status='stale'] {
+		border-style: dashed;
+		color: var(--ink-2);
+	}
+
+	.analysis-state[data-status='failed'] {
+		border-color: var(--danger);
+		color: var(--danger);
+	}
+
+	.audio-selection {
+		padding: 1rem 1.1rem;
+		background: color-mix(in srgb, var(--surface), transparent 30%);
+	}
+
+	.audio-selection > p:last-child {
+		margin-bottom: 0;
+	}
+
+	.selection-facts div {
+		grid-template-columns: 5.2rem minmax(0, 1fr);
+	}
+
+	.analysis-copy {
+		margin-top: 1rem;
+		padding-top: 0.8rem;
+		border-top: 1px solid var(--rule);
+		font-size: 0.84rem;
+	}
+
+	.warning-copy {
+		color: var(--ink-2);
+	}
+
+	.error-copy {
+		color: var(--danger);
+	}
+
 	.boundary {
 		margin-top: 1.7rem;
 		padding-top: 1.3rem;
@@ -599,7 +969,8 @@
 		.grid,
 		.boundary-grid,
 		.workspace-facts,
-		.initialize {
+		.initialize,
+		.audio-browser {
 			grid-template-columns: 1fr;
 		}
 
@@ -610,6 +981,16 @@
 
 		.initialize button {
 			justify-self: start;
+		}
+
+		.library-heading {
+			align-items: start;
+			flex-direction: column;
+		}
+
+		.audio-browser > div {
+			border-right: 0;
+			border-bottom: 1px solid var(--rule);
 		}
 	}
 </style>

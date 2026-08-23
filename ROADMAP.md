@@ -187,7 +187,7 @@ This is the acceptance surface for the native transcription and diarization endp
   - [x] Persist the granted directory handle in IndexedDB keyed by workspace ID; query or request permission again when the browser requires it
   - [x] Feature-detect `showDirectoryPicker`; fall back to read-only directory input where directory writes are unavailable
   - [ ] In fallback mode, offer new recordings and generated artifacts as downloads when those producers land below
-- [ ] Enumerate supported audio files and expose explicit refresh, selected-file, unprocessed, ready, stale, and failed states without requiring a filesystem watcher
+- [x] Enumerate supported audio files and expose explicit refresh, selected-file, unprocessed, ready, stale, and failed states without requiring a filesystem watcher — recursive File System Access and read-only folder inventories share one deterministic filter; refresh preserves analysis state for unchanged files and marks changed source audio stale
 - [ ] Build the inspection timeline fixture-first, then connect it to the same-origin APIs
   - [ ] Define a transport- and storage-neutral timed-annotation model that can add, revise, and finalize transcript words, transcript segments, and speaker turns instead of assuming immutable completed arrays
   - [ ] Browser-decoded waveform and native audio playback share one seekable playhead
