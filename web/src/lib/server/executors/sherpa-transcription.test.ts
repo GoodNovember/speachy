@@ -81,6 +81,32 @@ describe('SherpaWhisperTranscriptionExecutor', () => {
 		);
 	});
 
+	it("chunks long speech ranges below sherpa Whisper's 30-second limit", async () => {
+		const call = vi.fn(async (_method: string, _payload: { samples: Float32Array }) => ({
+			text: ` Part ${call.mock.calls.length}. `,
+			lang: 'en'
+		}));
+		const executor = new SherpaWhisperTranscriptionExecutor({ paths, client: { call } });
+		const audio = { data: new Float32Array(600), sampleRate: 10, name: 'long.wav' };
+		await expect(
+			executor.transcribe(
+				request({ audio, speechSegments: [{ start: 0, end: audio.data.length }] }),
+				new AbortController().signal
+			)
+		).resolves.toEqual({
+			text: 'Part 1. Part 2. Part 3.',
+			language: 'en',
+			duration: 60,
+			segments: [
+				{ id: 0, start: 0, end: 29, text: 'Part 1.' },
+				{ id: 1, start: 29, end: 58, text: 'Part 2.' },
+				{ id: 2, start: 58, end: 60, text: 'Part 3.' }
+			]
+		});
+		expect(call).toHaveBeenCalledTimes(3);
+		expect(call.mock.calls.map(([, payload]) => payload.samples.length)).toEqual([290, 290, 20]);
+	});
+
 	it('adapts completed native inference to the streaming contract', async () => {
 		const executor = new SherpaWhisperTranscriptionExecutor({
 			paths,

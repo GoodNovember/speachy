@@ -188,6 +188,7 @@ vite.config.*.timestamp-*
 
 # Native inference models are provisioned locally and must not be committed.
 web/models/sherpa-*
+web/test-results/
 
 # OS-specific
 Thumbs.db

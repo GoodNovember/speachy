@@ -11,6 +11,7 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"test": "vitest run",
 		"test:contract": "vitest run tests/contract",
+		"test:benchmark:longform": "vitest run tests/integration/native-transcription-longform-benchmark.test.ts --maxWorkers=1",
 		"test:watch": "vitest",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",

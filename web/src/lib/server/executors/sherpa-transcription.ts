@@ -29,6 +29,8 @@ type NativeTranscriptionClient = {
 	close?(): Promise<void>;
 };
 
+const MAX_WHISPER_CHUNK_SECONDS = 29;
+
 export type SherpaWhisperExecutorOptions = {
 	paths?: SherpaWhisperModelPaths;
 	client?: NativeTranscriptionClient;
@@ -51,7 +53,7 @@ function validateRequest(request: TranscriptionRequest): void {
 	}
 }
 
-function decodeResult(value: unknown, duration: number): Transcription {
+function decodeResult(value: unknown): { text: string; language: string } {
 	if (
 		typeof value !== 'object' ||
 		value === null ||
@@ -60,23 +62,27 @@ function decodeResult(value: unknown, duration: number): Transcription {
 		throw new Error('Sherpa returned an invalid transcription result');
 	}
 	const result = value as NativeRecognitionResult;
-	const text = result.text.trim();
 	return {
-		text,
-		language: result.lang?.trim() || 'en',
-		duration,
-		segments:
-			text === ''
-				? []
-				: [
-						{
-							id: 0,
-							start: 0,
-							end: duration,
-							text
-						}
-					]
+		text: result.text.trim(),
+		language: result.lang?.trim() || 'en'
 	};
+}
+
+function chunkSpeechSegments(
+	segments: TranscriptionRequest['speechSegments'],
+	sampleCount: number,
+	sampleRate: number
+): { start: number; end: number }[] {
+	const maxSamples = Math.max(1, Math.floor(MAX_WHISPER_CHUNK_SECONDS * sampleRate));
+	const chunks: { start: number; end: number }[] = [];
+	for (const segment of segments) {
+		const start = Math.max(0, Math.min(sampleCount, Math.trunc(segment.start)));
+		const end = Math.max(start, Math.min(sampleCount, Math.trunc(segment.end)));
+		for (let offset = start; offset < end; offset += maxSamples) {
+			chunks.push({ start: offset, end: Math.min(offset + maxSamples, end) });
+		}
+	}
+	return chunks;
 }
 
 export class SherpaWhisperTranscriptionExecutor implements TranscriptionExecutor {
@@ -129,12 +135,39 @@ export class SherpaWhisperTranscriptionExecutor implements TranscriptionExecutor
 		if (!hasSherpaWhisperModel(this.#paths)) {
 			throw new Error(`Native model '${SHERPA_WHISPER_MODEL_ID}' is not installed`);
 		}
-		const result = await this.#client.call(
-			'transcribe',
-			{ samples: request.audio.data, sampleRate: request.audio.sampleRate },
-			signal
+		const duration = request.audio.data.length / request.audio.sampleRate;
+		const chunks = chunkSpeechSegments(
+			request.speechSegments,
+			request.audio.data.length,
+			request.audio.sampleRate
 		);
-		return decodeResult(result, request.audio.data.length / request.audio.sampleRate);
+		const texts: string[] = [];
+		const segments: NonNullable<Transcription['segments']> = [];
+		let language = 'en';
+		for (const chunk of chunks) {
+			if (signal.aborted) throw signal.reason;
+			// Copy only this window. Passing a subarray would retain the entire
+			// long-form recording while the worker processes a 29-second chunk.
+			const value = await this.#client.call(
+				'transcribe',
+				{
+					samples: request.audio.data.slice(chunk.start, chunk.end),
+					sampleRate: request.audio.sampleRate
+				},
+				signal
+			);
+			const result = decodeResult(value);
+			language = result.language;
+			if (result.text === '') continue;
+			texts.push(result.text);
+			segments.push({
+				id: segments.length,
+				start: chunk.start / request.audio.sampleRate,
+				end: chunk.end / request.audio.sampleRate,
+				text: result.text
+			});
+		}
+		return { text: texts.join(' '), language, duration, segments };
 	}
 
 	async *transcribeStream(

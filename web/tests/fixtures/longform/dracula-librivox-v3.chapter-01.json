@@ -1,0 +1,12 @@
+{
+	"schemaVersion": 1,
+	"id": "librivox-dracula-v3-chapter-01",
+	"title": "Dracula (Version 3), Chapter 1",
+	"author": "Bram Stoker",
+	"reader": "Kara Shallenberg",
+	"language": "en",
+	"audioFile": "dracula_01_stoker_64kb.mp3",
+	"minimumExpectedWords": 1000,
+	"sourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
+	"publicDomainUrl": "https://librivox.org/pages/public-domain/"
+}
