@@ -189,7 +189,7 @@ This is the acceptance surface for the native transcription and diarization endp
   - [ ] In fallback mode, offer new recordings and generated artifacts as downloads when those producers land below
 - [x] Enumerate supported audio files and expose explicit refresh, selected-file, unprocessed, ready, stale, and failed states without requiring a filesystem watcher — recursive File System Access and read-only folder inventories share one deterministic filter; refresh preserves analysis state for unchanged files and marks changed source audio stale
 - [ ] Build the inspection timeline fixture-first, then connect it to the same-origin APIs
-  - [ ] Define a transport- and storage-neutral timed-annotation model that can add, revise, and finalize transcript words, transcript segments, and speaker turns instead of assuming immutable completed arrays
+  - [x] Define a transport- and storage-neutral timed-annotation model that can add, revise, and finalize transcript words, transcript segments, and speaker turns instead of assuming immutable completed arrays — versioned plain-data documents replay strict external events immutably, retain provisional/final state and per-annotation revisions, and expose deterministic filtered views without owning API or filesystem transport
   - [ ] Browser-decoded waveform and native audio playback share one seekable playhead
   - [ ] Transcription segments and words align horizontally by timestamp
   - [ ] Diarization renders one lane per speaker so overlaps remain visible; speaker labels map deterministically into a small accessible palette and remain visible as text
