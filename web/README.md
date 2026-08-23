@@ -40,6 +40,21 @@ Inference always runs inside `src/lib/server/executors/worker-pool.ts`. Native i
 
 During Shape B, the server resolves the repository's `.venv` automatically and starts the inference worker from the repository root so `speaches.inference_worker` is importable in both development and production builds. Set `SPEACHY_PYTHON` to override the Python executable when using a different synced environment.
 
+`INFERENCE_BACKEND` controls executor composition:
+
+- `hybrid` (default) prefers compatible native executors and retains Python fallbacks.
+- `native` exposes only Node-native tasks; it never starts the Python worker.
+- `python` preserves the reference baseline.
+
+The first native transcription model has the distinct ID `sherpa-onnx/whisper-tiny.en`. Its files are not interchangeable with the CTranslate2 files in `Systran/faster-whisper-tiny`. Provision the official sherpa artifact under `web/models/`:
+
+```sh
+curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.en.tar.bz2 -o models/sherpa-onnx-whisper-tiny.en.tar.bz2
+tar -xf models/sherpa-onnx-whisper-tiny.en.tar.bz2 -C models
+```
+
+Set `SPEACHY_SHERPA_WHISPER_MODEL_DIR` to use another location. The real native endpoint check is gated by `SPEACHY_RUN_NATIVE_TRANSCRIPTION_INTEGRATION=1`; the opt-in Python/native cold-and-warm comparison is gated by `SPEACHY_RUN_NATIVE_TRANSCRIPTION_BENCHMARK=1`.
+
 ## ffmpeg
 
 MP3, Opus, FLAC, and AAC encoding requires an ffmpeg executable. Install ffmpeg through the host operating system or container image and keep it on `PATH`; Linux and macOS therefore use the normal `ffmpeg` command without any platform-specific path. Set `FFMPEG_PATH` when the binary lives elsewhere.

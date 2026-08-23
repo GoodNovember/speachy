@@ -48,6 +48,8 @@ Locked decisions. Add to this as open questions resolve.
 - **An audio workspace is a user-selected, explicitly initialized directory.** The `Open Audio Workspace` button directly invokes `showDirectoryPicker({ mode: 'readwrite' })`; a root `speachy.workspace.json` file blesses the directory. Chromium gets read/write workspace support, while unsupported browsers degrade to read-only folder selection plus explicit downloads. Browser permission handles remain in IndexedDB and never enter the portable workspace.
 - **Workspace identity, artifacts, browser state, and cache have separate owners.** `speachy.workspace.json` contains only versioned workspace identity and stable relative-path preferences. Audio and analysis files are portable reviewed artifacts. Directory permissions and last-open state are browser-local. Playhead and panel state are transient. Rebuildable waveform data is cache, not canonical workspace state.
 - **The persistent inspector lives at `/workspace`; shared timeline primitives know neither folders nor sockets.** `/stt` remains a stateless one-file playground, `/mic` remains a capture check, and `/v1/*` remains the compatibility API. Waveform, capture, playhead, timed-annotation, speaker-lane, selection, and diagnostics modules accept both final batch results and provisional realtime updates without owning directory handles, IndexedDB, WebSockets, or artifact writes.
+- **Native inference proof now precedes further workspace work.** The workspace branch is paused after the portable manifest, inventory, waveform, transcript lanes, and directory-picker state fix. Speachy must first prove that a production SvelteKit server can transcribe through a Node-native executor with Python unavailable; the separate desktop-workbench project can own Electron-specific workspace ergonomics.
+- **Inference backend selection is explicit.** `INFERENCE_BACKEND=hybrid` prefers compatible native executors and retains Python fallbacks, `native` exposes only Node-native tasks, and `python` preserves the comparison baseline. A CTranslate2 cache entry and a sherpa ONNX artifact use distinct model IDs because their files are not interchangeable.
 
 ### Open questions
 
@@ -174,7 +176,7 @@ Not carried over: streaming replies on the audio chat page. The request is non-s
 
 ---
 
-## Phase 2.5 — Audio workspace and inspection rig
+## Phase 2.5 — Audio workspace and inspection rig — PAUSED
 
 This is the acceptance surface for the native transcription and diarization endpoints, not a separate demo. It keeps the original audio, raw inference responses, derived alignment, browser permissions, and transient UI state in distinct ownership domains.
 
@@ -234,6 +236,11 @@ The largest single chunk, and the part most worth doing carefully. Everything he
 ## Phase 4 — Retire Python
 
 One executor at a time, easiest and most verifiable first.
+
+- [x] Prove native-only transcription through the production HTTP boundary with `INFERENCE_BACKEND=native` and an invalid Python executable — `sherpa-onnx/whisper-tiny.en` returns `{"text":"Hello World."}` for the checked-in WAV without starting Python
+- [x] Add a reproducible opt-in cold/warm comparison harness (`SPEACHY_RUN_NATIVE_TRANSCRIPTION_BENCHMARK=1`) and keep the sherpa ONNX model identity distinct from `Systran/faster-whisper-tiny`
+- [x] Record the first Windows CPU smoke evidence on the 1.3235-second checked-in WAV: faster-whisper/CTranslate2 INT8 was 8356 ms cold and 1045 ms warm (RTF 6.31 / 0.79), while sherpa Whisper ONNX INT8 was 1167 ms cold and 193 ms warm (RTF 0.88 / 0.15). Both produced the expected phrase; this fixture is proof of viability, not a quality verdict
+- [ ] Expand the Whisper comparison from the short smoke fixture to a representative corpus before resolving the quality/performance gate; record real-time factor, memory, transcript quality, and timestamp quality
 
 - [ ] Kokoro TTS on `sherpa-onnx` — verify by ear against the Python output
 - [ ] Piper TTS on `sherpa-onnx`

@@ -1,5 +1,13 @@
 import type { CachedRepoInfo } from '@huggingface/hub';
 import type { Model, ModelTask, Voice } from '$lib/types/api';
+import { loadConfig, type Config } from './config.ts';
+import {
+	hasSherpaWhisperModel,
+	resolveSherpaWhisperModelPaths,
+	SHERPA_WHISPER_MODEL_ID,
+	sherpaWhisperCreatedAt
+} from './native-whisper.ts';
+import { getConfig, hasRuntime } from './runtime.ts';
 import {
 	extractLanguageList,
 	getCachedModelReposInfo,
@@ -240,9 +248,30 @@ export async function listRemoteCatalogModelsByTask(task?: ModelTask): Promise<C
 
 export async function listLocalModels(cacheDir?: string): Promise<CatalogModel[]> {
 	const models: CatalogModel[] = [];
-	for (const repo of await getCachedModelReposInfo(cacheDir)) {
-		const card = await getModelCardDataFromCachedRepoInfo(repo);
-		if (card !== undefined) models.push(...modelsForCachedRepo(repo, card));
+	const backend: Config['inferenceBackend'] =
+		cacheDir !== undefined
+			? 'hybrid'
+			: hasRuntime()
+				? getConfig().inferenceBackend
+				: loadConfig(process.env).inferenceBackend;
+	if (backend !== 'native') {
+		for (const repo of await getCachedModelReposInfo(cacheDir)) {
+			const card = await getModelCardDataFromCachedRepoInfo(repo);
+			if (card !== undefined) models.push(...modelsForCachedRepo(repo, card));
+		}
+	}
+	if (cacheDir === undefined && backend !== 'python') {
+		const nativeWhisper = resolveSherpaWhisperModelPaths();
+		if (hasSherpaWhisperModel(nativeWhisper)) {
+			models.push({
+				id: SHERPA_WHISPER_MODEL_ID,
+				created: await sherpaWhisperCreatedAt(nativeWhisper),
+				object: 'model',
+				owned_by: 'sherpa-onnx',
+				language: ['en'],
+				task: 'automatic-speech-recognition'
+			});
+		}
 	}
 
 	// Silero is bundled with the inference runtime rather than stored in the HF cache.

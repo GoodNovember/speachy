@@ -22,6 +22,16 @@ describe('WorkerPool', () => {
 		});
 	});
 
+	it('can run an inline worker for production-packaged native executors', async () => {
+		pool = new WorkerPool({
+			script:
+				"const { parentPort } = require('node:worker_threads'); parentPort.on('message', (message) => parentPort.postMessage({ id: message.id, kind: 'ok', value: message.payload }));",
+			eval: true,
+			name: 'inline-test'
+		});
+		await expect(pool.call('echo', 'inline')).resolves.toBe('inline');
+	});
+
 	it('propagates an error thrown inside the worker', async () => {
 		await expect(createPool().call('fail', undefined)).rejects.toThrow('worker failed on purpose');
 	});

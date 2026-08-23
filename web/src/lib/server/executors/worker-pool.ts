@@ -35,6 +35,7 @@ export type WorkerPoolOptions = {
 	size?: number;
 	workerData?: unknown;
 	name?: string;
+	eval?: boolean;
 };
 
 export class WorkerPool {
@@ -42,6 +43,7 @@ export class WorkerPool {
 	#size: number;
 	#workerData: unknown;
 	#name: string;
+	#eval: boolean;
 
 	#slots: Slot[] = [];
 	#queue: Job[] = [];
@@ -53,6 +55,7 @@ export class WorkerPool {
 		this.#size = Math.max(1, options.size ?? 1);
 		this.#workerData = options.workerData;
 		this.#name = options.name ?? 'worker';
+		this.#eval = options.eval ?? false;
 	}
 
 	get pending(): number {
@@ -197,7 +200,8 @@ export class WorkerPool {
 	#spawn(): Slot {
 		const worker = new Worker(this.#script, {
 			workerData: this.#workerData,
-			name: `${this.#name}-${this.#slots.length}`
+			name: `${this.#name}-${this.#slots.length}`,
+			eval: this.#eval
 		});
 		const slot: Slot = { worker, job: undefined };
 

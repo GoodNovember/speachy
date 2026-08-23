@@ -1,8 +1,11 @@
+import { loadConfig, type Config } from '../config.ts';
+import { getConfig, hasRuntime } from '../runtime.ts';
 import { getInferenceWorker } from './python-runtime.ts';
 import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
 import { PythonSpeechExecutor } from './python-speech.ts';
 import { PythonTranscriptionExecutor } from './python-transcription.ts';
+import { SherpaWhisperTranscriptionExecutor } from './sherpa-transcription.ts';
 import { SileroVadExecutor } from './silero-vad.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
 import type {
@@ -15,6 +18,7 @@ import type {
 } from './types.ts';
 
 const nativeVadExecutor = new SileroVadExecutor();
+let nativeTranscriptionExecutor: SherpaWhisperTranscriptionExecutor | undefined;
 
 const lazyPythonWorker = {
 	async request(
@@ -36,26 +40,55 @@ export async function findExecutorForModel<T extends ExecutorBase>(
 	return undefined;
 }
 
+function config(): Config {
+	return hasRuntime() ? getConfig() : loadConfig(process.env);
+}
+
+function nativeTranscription(): SherpaWhisperTranscriptionExecutor {
+	nativeTranscriptionExecutor ??= new SherpaWhisperTranscriptionExecutor({
+		workerCount: config().inferenceWorkers
+	});
+	return nativeTranscriptionExecutor;
+}
+
+export function composeTranscriptionExecutors(
+	backend: Config['inferenceBackend'],
+	nativeExecutor: TranscriptionExecutor,
+	pythonExecutor: TranscriptionExecutor
+): readonly TranscriptionExecutor[] {
+	if (backend === 'native') return [nativeExecutor];
+	if (backend === 'python') return [pythonExecutor];
+	return [nativeExecutor, pythonExecutor];
+}
+
 // This is the composition boundary for native routes. Route files depend only
 // on executor interfaces; concrete Python adapters stay contained here and can
 // be replaced by worker-thread implementations in Phase 4.
 export function getSpeakerEmbeddingExecutors(): readonly SpeakerEmbeddingExecutor[] {
+	if (config().inferenceBackend === 'native') return [];
 	return [new PythonSpeakerEmbeddingExecutor(lazyPythonWorker)];
 }
 
 export function getDiarizationExecutors(): readonly DiarizationExecutor[] {
+	if (config().inferenceBackend === 'native') return [];
 	return [new PythonDiarizationExecutor(lazyPythonWorker)];
 }
 
 export function getTranscriptionExecutors(): readonly TranscriptionExecutor[] {
-	return [new PythonTranscriptionExecutor(lazyPythonWorker)];
+	return composeTranscriptionExecutors(
+		config().inferenceBackend,
+		nativeTranscription(),
+		new PythonTranscriptionExecutor(lazyPythonWorker)
+	);
 }
 
 export function getTranslationExecutors(): readonly TranscriptionExecutor[] {
+	if (config().inferenceBackend === 'native') return [];
 	return [new PythonTranscriptionExecutor(lazyPythonWorker)];
 }
 
 export function getSpeechExecutors(): readonly SpeechExecutor[] {
+	if (config().inferenceBackend === 'native') return [];
 	return [new PythonSpeechExecutor(lazyPythonWorker)];
 }
 

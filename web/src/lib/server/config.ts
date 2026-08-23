@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LOG_LEVELS } from './logger.ts';
 
 const DEVICES = ['cpu', 'cuda', 'auto'] as const;
+const INFERENCE_BACKENDS = ['hybrid', 'native', 'python'] as const;
 
 // https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md
 const QUANTIZATIONS = [
@@ -108,6 +109,7 @@ export const configSchema = z.object({
 	// Inference worker threads per executor. Native inference calls block the
 	// thread they run on, so this is a hard concurrency limit, not a hint.
 	inferenceWorkers: z.coerce.number().int().min(1).default(1),
+	inferenceBackend: z.enum(INFERENCE_BACKENDS).default('hybrid'),
 
 	unstableVadFilter: envBoolean.default(true)
 });

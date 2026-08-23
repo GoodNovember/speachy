@@ -186,6 +186,9 @@ yarn-error.log*
 .vite/
 vite.config.*.timestamp-*
 
+# Native inference models are provisioned locally and must not be committed.
+web/models/sherpa-*
+
 # OS-specific
 Thumbs.db
 .DS_Store

@@ -33,7 +33,13 @@ describe('loadConfig', () => {
 		expect(config.port).toBe(8000);
 		expect(config.whisper.inferenceDevice).toBe('auto');
 		expect(config.whisper.computeType).toBe('default');
+		expect(config.inferenceBackend).toBe('hybrid');
 		expect(config.apiKey).toBeUndefined();
+	});
+
+	it('selects an explicit inference backend', () => {
+		expect(loadConfig({ INFERENCE_BACKEND: 'native' }).inferenceBackend).toBe('native');
+		expect(loadConfig({ INFERENCE_BACKEND: 'python' }).inferenceBackend).toBe('python');
 	});
 
 	it('coerces numeric and nested values', () => {
@@ -75,5 +81,9 @@ describe('loadConfig', () => {
 
 	it('rejects an unknown log level', () => {
 		expect(() => loadConfig({ LOG_LEVEL: 'verbose' })).toThrow(/logLevel/);
+	});
+
+	it('rejects an unknown inference backend', () => {
+		expect(() => loadConfig({ INFERENCE_BACKEND: 'remote' })).toThrow(/inferenceBackend/);
 	});
 });
