@@ -250,8 +250,9 @@ One executor at a time, easiest and most verifiable first.
 - [x] Expand the short smoke fixture into a scored one-chapter quality gate with pinned reference provenance, WER/edit counts, real-time factor, native memory, and structural timestamp coverage
 - [x] Serialize the representative-corpus contract in [`web/tests/fixtures/evaluation/README.md`](web/tests/fixtures/evaluation/README.md): public-domain long-form truth, deterministic synthetic conversations, and a manually reviewed Internet Archive television-news subset remain distinct evidence tiers
 - [ ] Expand the one-reader gate to a representative corpus and independently aligned excerpts before making broader quality or timestamp-accuracy claims
-  - [ ] Define strict v1 schemas for the shared corpus envelope, synthetic conversation recipes, and TV-news candidate manifests
-  - [ ] Render a deterministic opt-in two-speaker, six-minute _Dracula_ mixture with exact turn and overlap ground truth
+  - [x] Define strict v1 schemas for the shared corpus envelope, synthetic conversation recipes, and TV-news candidate manifests, with pure reference, path, hash, balance, transform, overlap, and ordering tests
+  - [x] Render a deterministic opt-in two-speaker, six-minute _Dracula_ mixture with exact turn and overlap ground truth
+    - The first recipe pins Chapters 1–4, assigns every chapter to both pseudo-speakers, and renders 18 silence-bounded turns with nine overlaps into exactly 360 seconds. The ffmpeg 9.0 Windows render produced SHA-256 `3700347d8bf0d203077565b15115f8d55f5be921a463085a58883e0e688ae690` with 0.288719 peak amplitude. Speaker timing is gold; transcript text remains explicitly unreviewed pending source-range transcription.
   - [ ] Score transcription and the existing Python diarization baseline on that mixture before adding a third pseudo-speaker
   - [ ] Curate twelve TV-news candidates as metadata-only records: four clean reports, four interviews, and four overlap/remote/noise cases
   - [ ] Preserve raw captions as silver evidence and manually promote only reviewed transcript and speaker-turn annotations to gold

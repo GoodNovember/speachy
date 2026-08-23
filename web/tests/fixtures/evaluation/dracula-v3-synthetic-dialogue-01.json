@@ -1,0 +1,279 @@
+{
+	"kind": "speachy.synthetic-conversation-corpus",
+	"schemaVersion": 1,
+	"id": "dracula-v3-synthetic-dialogue-01",
+	"title": "Dracula Version 3 deterministic two-speaker dialogue 01",
+	"language": "en",
+	"seed": 1608,
+	"annotations": {
+		"transcript": "unreviewed",
+		"speakerTurns": "gold"
+	},
+	"render": {
+		"duration": 360,
+		"sampleRate": 16000,
+		"channels": 1,
+		"format": "wav-pcm16"
+	},
+	"sources": [
+		{
+			"id": "dracula-v3-chapter-01",
+			"chapter": 1,
+			"audioFile": "dracula_01_stoker_64kb.mp3",
+			"audioSha256": "0c188b9517020788518df9125833d7e93b8dadc8200704e86f62a819d3dd5d93",
+			"mediaSourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
+			"publicDomainUrl": "https://librivox.org/pages/public-domain/",
+			"transcript": {
+				"status": "unreviewed",
+				"sourceUrl": "https://www.gutenberg.org/cache/epub/345/pg345.txt",
+				"sha256": "96cd16eacdbfebae8fdda5591f66e0cc8ee76be18e0cd1aca02bc00615782d28"
+			}
+		},
+		{
+			"id": "dracula-v3-chapter-02",
+			"chapter": 2,
+			"audioFile": "dracula_02_stoker_64kb.mp3",
+			"audioSha256": "4025899ef04fe61d4b1bf7abd2ce9d13a0f7ac8fce025dd45f1a0a5be2a1ca62",
+			"mediaSourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
+			"publicDomainUrl": "https://librivox.org/pages/public-domain/",
+			"transcript": {
+				"status": "unreviewed",
+				"sourceUrl": "https://www.gutenberg.org/cache/epub/345/pg345.txt",
+				"sha256": "96cd16eacdbfebae8fdda5591f66e0cc8ee76be18e0cd1aca02bc00615782d28"
+			}
+		},
+		{
+			"id": "dracula-v3-chapter-03",
+			"chapter": 3,
+			"audioFile": "dracula_03_stoker_64kb.mp3",
+			"audioSha256": "4c364edeaa8ed4e10ec6d961c8e7c1fd8781f9e0b6f3f916a5541c73f0207c7f",
+			"mediaSourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
+			"publicDomainUrl": "https://librivox.org/pages/public-domain/",
+			"transcript": {
+				"status": "unreviewed",
+				"sourceUrl": "https://www.gutenberg.org/cache/epub/345/pg345.txt",
+				"sha256": "96cd16eacdbfebae8fdda5591f66e0cc8ee76be18e0cd1aca02bc00615782d28"
+			}
+		},
+		{
+			"id": "dracula-v3-chapter-04",
+			"chapter": 4,
+			"audioFile": "dracula_04_stoker_64kb.mp3",
+			"audioSha256": "7f571436e706bfdb8684bcaa0a00e45bca711d70052fda39a320dc5c7b40c16f",
+			"mediaSourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
+			"publicDomainUrl": "https://librivox.org/pages/public-domain/",
+			"transcript": {
+				"status": "unreviewed",
+				"sourceUrl": "https://www.gutenberg.org/cache/epub/345/pg345.txt",
+				"sha256": "96cd16eacdbfebae8fdda5591f66e0cc8ee76be18e0cd1aca02bc00615782d28"
+			}
+		}
+	],
+	"speakers": [
+		{
+			"id": "speaker-a",
+			"label": "baseline",
+			"transform": { "pitchSemitones": 0, "rate": 1, "gainDb": -6 }
+		},
+		{
+			"id": "speaker-b",
+			"label": "raised-faster",
+			"transform": { "pitchSemitones": 1.5, "rate": 1.06, "gainDb": -7 }
+		}
+	],
+	"turns": [
+		{
+			"id": "turn-001",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-01",
+			"sourceRange": { "start": 105.929, "end": 129.447 },
+			"outputRange": { "start": 0, "end": 23.518 },
+			"overlapGroup": "overlap-01"
+		},
+		{
+			"id": "turn-002",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-01",
+			"sourceRange": { "start": 140.684, "end": 159.578 },
+			"outputRange": { "start": 22.318, "end": 40.142528 },
+			"overlapGroup": "overlap-01"
+		},
+		{
+			"id": "turn-003",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-02",
+			"sourceRange": { "start": 93.389, "end": 115.357 },
+			"outputRange": { "start": 40.442528, "end": 62.410528 },
+			"overlapGroup": "overlap-02"
+		},
+		{
+			"id": "turn-004",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-02",
+			"sourceRange": { "start": 124.387, "end": 144.97 },
+			"outputRange": { "start": 61.010528, "end": 80.428453 },
+			"overlapGroup": "overlap-02"
+		},
+		{
+			"id": "turn-005",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-03",
+			"sourceRange": { "start": 96.998, "end": 118.204 },
+			"outputRange": { "start": 80.828453, "end": 102.034453 },
+			"overlapGroup": "overlap-03"
+		},
+		{
+			"id": "turn-006",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-03",
+			"sourceRange": { "start": 125.226, "end": 144.264 },
+			"outputRange": { "start": 100.534453, "end": 118.49483 },
+			"overlapGroup": "overlap-03"
+		},
+		{
+			"id": "turn-007",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-04",
+			"sourceRange": { "start": 91.892, "end": 112.651 },
+			"outputRange": { "start": 118.74483, "end": 139.50383 },
+			"overlapGroup": "overlap-04"
+		},
+		{
+			"id": "turn-008",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-04",
+			"sourceRange": { "start": 115.323, "end": 136.74 },
+			"outputRange": { "start": 138.20383, "end": 158.408547 },
+			"overlapGroup": "overlap-04"
+		},
+		{
+			"id": "turn-009",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-01",
+			"sourceRange": { "start": 161.352, "end": 183.108 },
+			"outputRange": { "start": 158.908547, "end": 180.664547 },
+			"overlapGroup": "overlap-05"
+		},
+		{
+			"id": "turn-010",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-01",
+			"sourceRange": { "start": 195.988, "end": 218.269 },
+			"outputRange": { "start": 179.164547, "end": 200.184358 },
+			"overlapGroup": "overlap-05"
+		},
+		{
+			"id": "turn-011",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-02",
+			"sourceRange": { "start": 145.6, "end": 165.585 },
+			"outputRange": { "start": 200.484358, "end": 220.469358 },
+			"overlapGroup": "overlap-06"
+		},
+		{
+			"id": "turn-012",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-02",
+			"sourceRange": { "start": 169.062, "end": 190.959 },
+			"outputRange": { "start": 219.069358, "end": 239.726906 },
+			"overlapGroup": "overlap-06"
+		},
+		{
+			"id": "turn-013",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-03",
+			"sourceRange": { "start": 156.612, "end": 175.857 },
+			"outputRange": { "start": 240.176906, "end": 259.421906 },
+			"overlapGroup": "overlap-07"
+		},
+		{
+			"id": "turn-014",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-03",
+			"sourceRange": { "start": 176.46, "end": 197.19 },
+			"outputRange": { "start": 258.121906, "end": 277.678509 },
+			"overlapGroup": "overlap-07"
+		},
+		{
+			"id": "turn-015",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-04",
+			"sourceRange": { "start": 150.2, "end": 172.934 },
+			"outputRange": { "start": 278.178509, "end": 300.912509 },
+			"overlapGroup": "overlap-08"
+		},
+		{
+			"id": "turn-016",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-04",
+			"sourceRange": { "start": 176.622, "end": 198.228 },
+			"outputRange": { "start": 299.412509, "end": 319.795528 },
+			"overlapGroup": "overlap-08"
+		},
+		{
+			"id": "turn-017",
+			"speakerId": "speaker-a",
+			"sourceId": "dracula-v3-chapter-01",
+			"sourceRange": { "start": 242.688, "end": 264.138 },
+			"outputRange": { "start": 320.045528, "end": 341.495528 },
+			"overlapGroup": "overlap-09"
+		},
+		{
+			"id": "turn-018",
+			"speakerId": "speaker-b",
+			"sourceId": "dracula-v3-chapter-02",
+			"sourceRange": { "start": 194.353, "end": 215.513 },
+			"outputRange": { "start": 340.037736, "end": 360 },
+			"overlapGroup": "overlap-09"
+		}
+	],
+	"scenarios": [
+		{
+			"id": "opening-monologue",
+			"kind": "monologue",
+			"outputRange": { "start": 0, "end": 22.318 },
+			"turnIds": ["turn-001"]
+		},
+		{
+			"id": "first-overlap",
+			"kind": "overlap",
+			"outputRange": { "start": 22.318, "end": 23.518 },
+			"turnIds": ["turn-001", "turn-002"]
+		},
+		{
+			"id": "first-handoff",
+			"kind": "handoff",
+			"outputRange": { "start": 40.142528, "end": 40.442528 },
+			"turnIds": ["turn-002", "turn-003"]
+		},
+		{
+			"id": "raised-speaker-monologue",
+			"kind": "monologue",
+			"outputRange": { "start": 180.664547, "end": 200.184358 },
+			"turnIds": ["turn-010"]
+		},
+		{
+			"id": "alternating-body",
+			"kind": "clean-alternating",
+			"outputRange": { "start": 40.442528, "end": 360 },
+			"turnIds": [
+				"turn-003",
+				"turn-004",
+				"turn-005",
+				"turn-006",
+				"turn-007",
+				"turn-008",
+				"turn-009",
+				"turn-010",
+				"turn-011",
+				"turn-012",
+				"turn-013",
+				"turn-014",
+				"turn-015",
+				"turn-016",
+				"turn-017",
+				"turn-018"
+			]
+		}
+	]
+}

@@ -165,8 +165,15 @@ Rate-limit Archive.org discovery and acquisition, use an identifying user agent,
 
 ## Next implementation slice
 
-1. Define strict Zod v1 schemas for the shared envelope, synthetic recipe, and TV-news candidate manifest.
-2. Add pure validation and timeline tests, including overlap, balance, path, ID, and hash failures.
-3. Implement a deterministic two-speaker, six-minute Dracula renderer behind an explicit opt-in gate.
-4. Score its transcription against the source text and its speaker timeline against the existing Python diarization baseline.
-5. Only then add rate-limited TV-news candidate discovery; selecting and acquiring broadcast clips remains a separate reviewed action.
+1. [x] Define strict Zod v1 schemas for the shared discriminated envelope, synthetic recipe, and TV-news candidate manifest.
+2. [x] Add pure validation and timeline tests, including overlap, balance, path, ID, and hash failures.
+3. [x] Implement a deterministic two-speaker, six-minute Dracula renderer behind an explicit opt-in gate.
+4. [ ] Curate exact spoken transcript text for the selected source ranges; the recipe truthfully remains `unreviewed` until that review is complete.
+5. [ ] Score the speaker timeline against native sherpa and the existing Python diarization baseline, and score transcription only after the transcript becomes gold.
+6. [ ] Only then add rate-limited TV-news candidate discovery; selecting and acquiring broadcast clips remains a separate reviewed action.
+
+The first reviewed recipe is [`dracula-v3-synthetic-dialogue-01.json`](dracula-v3-synthetic-dialogue-01.json). It pins Chapters 1–4 by SHA-256, gives both pseudo-speakers passages from all four chapters, defines 18 silence-bounded turns, nine 500–1,500 ms overlaps, 200–500 ms handoffs, and an exact 360-second output timeline. Speaker-turn annotations are gold because the renderer owns them; transcript annotations remain unreviewed because book text and source offsets alone are not an independently aligned spoken transcript.
+
+Rendering is explicit and local-only. From `web`, set `SPEACHY_LONGFORM_CORPUS` to the directory containing the chapter MP3s, set `SPEACHY_RUN_SYNTHETIC_RENDER=1`, and run `npm run test:render:synthetic`. The renderer verifies every source hash before invoking ffmpeg, applies rate and pitch independently, mixes sequentially with fixed gains, rejects clipping, and writes the WAV, JSON ground truth, RTTM, and evidence under ignored `test-results/synthetic/`.
+
+The first Windows render used ffmpeg 9.0 and produced a 16 kHz mono PCM16 WAV with SHA-256 `3700347d8bf0d203077565b15115f8d55f5be921a463085a58883e0e688ae690`, exactly 360 seconds and 11,520,044 bytes. Its peak amplitude was 0.288719, leaving overlap headroom. This hash is a replay check for the pinned recipe, source files, and ffmpeg build—not a promise that another ffmpeg version will produce byte-identical output.
