@@ -51,11 +51,11 @@ Locked decisions. Add to this as open questions resolve.
 - **Native inference proof now precedes further workspace work.** The workspace branch is paused after the portable manifest, inventory, waveform, transcript lanes, and directory-picker state fix. Speachy must first prove that a production SvelteKit server can transcribe through a Node-native executor with Python unavailable; the separate desktop-workbench project can own Electron-specific workspace ergonomics.
 - **Inference backend selection is explicit.** `INFERENCE_BACKEND=hybrid` prefers compatible native executors and retains Python fallbacks, `native` exposes only Node-native tasks, and `python` preserves the comparison baseline. A CTranslate2 cache entry and a sherpa ONNX artifact use distinct model IDs because their files are not interchangeable.
 - **Parakeet v2 INT8 is the preferred native English STT model on the current Windows CPU.** The scored Chapter 1 gate measured 1.96% WER at RTF 0.147, versus native Whisper tiny.en at 4.98% / 0.161 and Python faster-whisper-tiny at 14.04% / 0.067. This is a local one-reader result, not a universal quality claim; Parakeet's roughly 1.35 GiB peak Node RSS and unmeasured timestamp accuracy remain explicit tradeoffs.
+- **Pyannote Community-1 remains the diarization quality path.** On the deterministic six-minute two-speaker fixture, Community-1 measured 21.18% collar-free overlap-inclusive DER versus native sherpa's 54.83%. Sherpa's 141.693 seconds of speaker confusion dominates its error. This one-narrator transformed fixture is not a universal ranking, but it is enough to reject replacing Community-1 with the current sherpa bundle by default.
 
 ### Open questions
 
 - [ ] Does Parakeet's Chapter 1 advantage generalize across speakers, accents, noise, and conversational audio? The single-reader long-form gate supports the current local recommendation but not a universal winner.
-- [ ] Does Pyannote Community-1 remain the diarization quality path? Native sherpa capability is now proven, but its fast-clustering bundle still needs a scored comparison against Community-1 before it can replace the Python reference.
 - [ ] Do we keep the WebRTC endpoint at all, or is WebSocket sufficient for the clients we care about? `werift` is the `aiortc` replacement but is materially less battle-tested.
 
 ---
@@ -253,7 +253,9 @@ One executor at a time, easiest and most verifiable first.
   - [x] Define strict v1 schemas for the shared corpus envelope, synthetic conversation recipes, and TV-news candidate manifests, with pure reference, path, hash, balance, transform, overlap, and ordering tests
   - [x] Render a deterministic opt-in two-speaker, six-minute _Dracula_ mixture with exact turn and overlap ground truth
     - The first recipe pins Chapters 1–4, assigns every chapter to both pseudo-speakers, and renders 18 silence-bounded turns with nine overlaps into exactly 360 seconds. The ffmpeg 9.0 Windows render produced SHA-256 `3700347d8bf0d203077565b15115f8d55f5be921a463085a58883e0e688ae690` with 0.288719 peak amplitude. Speaker timing is gold; transcript text remains explicitly unreviewed pending source-range transcription.
-  - [ ] Score transcription and the existing Python diarization baseline on that mixture before adding a third pseudo-speaker
+  - [x] Score native sherpa and the existing Python diarization baseline on the two-speaker mixture before adding a third pseudo-speaker
+    - Community-1 measured 21.18% collar-free overlap-inclusive DER (19.45% with ±250 ms boundary tolerance) at RTF 0.866. Native sherpa measured 54.83% (54.49% tolerant) at RTF 0.321. Both recovered 27.7% of gold overlap duration with no overlap false positives. The TypeScript scorer matched `pyannote.metrics` 4.0.0 on every recorded DER/JER component.
+  - [ ] Curate gold spoken text for the selected ranges, then score transcription without treating book text as aligned truth
   - [ ] Curate twelve TV-news candidates as metadata-only records: four clean reports, four interviews, and four overlap/remote/noise cases
   - [ ] Preserve raw captions as silver evidence and manually promote only reviewed transcript and speaker-turn annotations to gold
 
@@ -265,7 +267,7 @@ One executor at a time, easiest and most verifiable first.
 - [x] Parakeet TDT v2 INT8 STT on `sherpa-onnx`, with a distinct model identity, worker-isolated transducer executor, native-only HTTP proof, token-derived word timestamps, and controlled short/long comparison evidence
 - [x] Native sherpa diarization with Pyannote 3.0 segmentation plus English WeSpeaker ResNet34-LM embeddings — distinct model identity, worker isolation, automatic or fixed clustering, stable speaker labels, and a two-speaker production HTTP proof
   - The built server ran with `INFERENCE_BACKEND=native` and a deliberately invalid `SPEACHY_PYTHON`; sherpa's official 16-second English fixture returned HTTP 200 with four valid turns spanning both requested labels, `SPEAKER_00` and `SPEAKER_01`.
-- [ ] Score native sherpa diarization against Pyannote Community-1 on the deterministic conversation fixture, then consciously choose the default quality path
+- [x] Score native sherpa diarization against Pyannote Community-1 on the deterministic conversation fixture; retain Community-1 as the default quality path
 - [ ] GPU path: ONNX Runtime CUDA from Node, verified in Docker
 - [ ] Rewrite the `Dockerfile` and compose files for a Node runtime
 - [ ] Delete the Python inference worker, `pyproject.toml`, `uv.lock`, `flake.nix`

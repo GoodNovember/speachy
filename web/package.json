@@ -12,6 +12,7 @@
 		"test": "vitest run",
 		"test:contract": "vitest run tests/contract",
 		"test:benchmark:longform": "vitest run tests/integration/native-transcription-longform-benchmark.test.ts --maxWorkers=1",
+		"test:benchmark:diarization": "vitest run tests/integration/diarization-quality-benchmark.test.ts --maxWorkers=1",
 		"test:render:synthetic": "vitest run tests/integration/synthetic-conversation-render.test.ts --maxWorkers=1",
 		"test:watch": "vitest",
 		"lint": "prettier --check . && eslint .",

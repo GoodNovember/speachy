@@ -169,11 +169,25 @@ Rate-limit Archive.org discovery and acquisition, use an identifying user agent,
 2. [x] Add pure validation and timeline tests, including overlap, balance, path, ID, and hash failures.
 3. [x] Implement a deterministic two-speaker, six-minute Dracula renderer behind an explicit opt-in gate.
 4. [ ] Curate exact spoken transcript text for the selected source ranges; the recipe truthfully remains `unreviewed` until that review is complete.
-5. [ ] Score the speaker timeline against native sherpa and the existing Python diarization baseline, and score transcription only after the transcript becomes gold.
-6. [ ] Only then add rate-limited TV-news candidate discovery; selecting and acquiring broadcast clips remains a separate reviewed action.
+5. [x] Score the speaker timeline against native sherpa and the existing Python diarization baseline.
+6. [ ] Score transcription only after the transcript becomes gold.
+7. [ ] Only then add rate-limited TV-news candidate discovery; selecting and acquiring broadcast clips remains a separate reviewed action.
 
 The first reviewed recipe is [`dracula-v3-synthetic-dialogue-01.json`](dracula-v3-synthetic-dialogue-01.json). It pins Chapters 1–4 by SHA-256, gives both pseudo-speakers passages from all four chapters, defines 18 silence-bounded turns, nine 500–1,500 ms overlaps, 200–500 ms handoffs, and an exact 360-second output timeline. Speaker-turn annotations are gold because the renderer owns them; transcript annotations remain unreviewed because book text and source offsets alone are not an independently aligned spoken transcript.
 
 Rendering is explicit and local-only. From `web`, set `SPEACHY_LONGFORM_CORPUS` to the directory containing the chapter MP3s, set `SPEACHY_RUN_SYNTHETIC_RENDER=1`, and run `npm run test:render:synthetic`. The renderer verifies every source hash before invoking ffmpeg, applies rate and pitch independently, mixes sequentially with fixed gains, rejects clipping, and writes the WAV, JSON ground truth, RTTM, and evidence under ignored `test-results/synthetic/`.
 
 The first Windows render used ffmpeg 9.0 and produced a 16 kHz mono PCM16 WAV with SHA-256 `3700347d8bf0d203077565b15115f8d55f5be921a463085a58883e0e688ae690`, exactly 360 seconds and 11,520,044 bytes. Its peak amplitude was 0.288719, leaving overlap headroom. This hash is a replay check for the pinned recipe, source files, and ffmpeg build—not a promise that another ffmpeg version will produce byte-identical output.
+
+## First diarization comparison
+
+The opt-in comparison is gated by `SPEACHY_RUN_DIARIZATION_BENCHMARK=1` and runs with `npm run test:benchmark:diarization`. Both backends receive the same decoded WAV and fixed speaker count of two. Raw segments, mappings, metric components, timings, model evidence, JSON results, and a Markdown summary are written under ignored `test-results/benchmarks/`.
+
+DER follows the [pyannote.metrics definition](https://pyannote.github.io/pyannote-metrics/reference.html): optimal one-to-one anonymous-speaker mapping, with false alarm, missed speech, and confusion divided by reference speaker-time. Overlap therefore counts once per active gold speaker. The boundary-tolerant view uses a 0.5-second centered collar—250 ms on each side—because pyannote defines `collar` as the total centered exclusion width. JER follows its reference-speaker average, and overlap duration precision/recall remains separate. The TypeScript scorer's real-result components were independently checked against the installed `pyannote.metrics` 4.0.0 implementation and matched numerically.
+
+| Backend       | DER 0 ms + overlap | DER ±250 ms + overlap | DER 0 ms no overlap | DER ±250 ms no overlap | JER 0 ms + overlap |    Overlap P/R |   RTF |
+| ------------- | -----------------: | --------------------: | ------------------: | ---------------------: | -----------------: | -------------: | ----: |
+| Native sherpa |             54.83% |                54.49% |              56.06% |                 55.64% |             74.57% | 100.0% / 27.7% | 0.321 |
+| Community-1   |             21.18% |                19.45% |              19.79% |                 18.88% |             22.12% | 100.0% / 27.7% | 0.866 |
+
+Community-1 remains the quality path for now. Its collar-free error comprised 73.992 seconds of missed speaker-time, 4.286 seconds of confusion, and no false alarm. Native sherpa missed 60.981 speaker-seconds but confused speakers for 141.693 seconds, which dominates its result. Both systems detected only 27.7% of gold overlap duration, so the perfect overlap precision reflects conservative overlap output rather than strong overlap recovery. This is one synthetic one-narrator fixture, not a universal model ranking; it is sufficient to reject replacing Community-1 with this sherpa bundle by default.
