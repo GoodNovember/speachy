@@ -11,6 +11,10 @@
 	} from '$lib/workspace/directory';
 	import { loadLastWorkspaceHandle, rememberWorkspaceHandle } from '$lib/workspace/handle-store';
 	import {
+		selectWorkspaceDirectory,
+		type WorkspaceDirectoryPicker
+	} from '$lib/workspace/workspace-picker';
+	import {
 		WORKSPACE_KIND,
 		WORKSPACE_MANIFEST_FILENAME,
 		WORKSPACE_SCHEMA_VERSION,
@@ -27,7 +31,6 @@
 	import WorkspaceWaveform from '$lib/workspace/WorkspaceWaveform.svelte';
 	import { WORKSPACE_TIMELINE_FIXTURE_DOCUMENT } from '$lib/workspace/timeline-fixture';
 
-	type DirectoryPicker = (options: { mode: 'readwrite' }) => Promise<PermissionedDirectoryHandle>;
 	type WorkspaceSource =
 		| { kind: 'handle'; handle: PermissionedDirectoryHandle }
 		| { kind: 'folder-files'; files: File[] };
@@ -67,6 +70,7 @@
 	let workspaceSource = $state<WorkspaceSource | null>(null);
 	let audioInventory = $state<AudioInventory>({ status: 'idle' });
 	let selectedAudioPath = $state<string | null>(null);
+	let openingPhase = $state<'idle' | 'choosing' | 'inspecting'>('idle');
 	let inventoryRequest = 0;
 
 	const selectedAudio = $derived(
@@ -76,6 +80,8 @@
 	);
 
 	const stateLabel = $derived.by(() => {
+		if (openingPhase === 'choosing') return 'Choose a directory';
+		if (openingPhase === 'inspecting') return 'Opening workspace';
 		switch (view.status) {
 			case 'permission':
 				return 'Permission needed';
@@ -98,8 +104,8 @@
 		if (picker !== undefined) void restoreLastWorkspace();
 	});
 
-	function directoryPicker(): DirectoryPicker | undefined {
-		const picker = (window as Window & { showDirectoryPicker?: DirectoryPicker })
+	function directoryPicker(): WorkspaceDirectoryPicker | undefined {
+		const picker = (window as Window & { showDirectoryPicker?: WorkspaceDirectoryPicker })
 			.showDirectoryPicker;
 		return picker?.bind(window);
 	}
@@ -242,20 +248,29 @@
 		const picker = directoryPicker();
 		if (picker === undefined) return;
 		busy = true;
+		openingPhase = 'choosing';
 		clearFeedback();
 		try {
-			const handle = await picker({ mode: 'readwrite' });
-			let permission = await queryWorkspacePermission(handle);
-			if (permission !== 'granted') permission = await requestWorkspacePermission(handle);
+			const selection = await selectWorkspaceDirectory(picker);
+			if (selection.status === 'cancelled') {
+				notice = 'No directory handle was granted. Nothing was opened or changed.';
+				return;
+			}
+			const { handle } = selection;
+			openingPhase = 'inspecting';
+			const permission = await queryWorkspacePermission(handle);
 			if (permission !== 'granted') {
 				view = { status: 'permission', handle, directoryName: handle.name };
 				return;
 			}
 			await openHandle(handle);
 		} catch (pickError) {
-			if (pickError instanceof DOMException && pickError.name === 'AbortError') return;
-			error = message(pickError);
+			error =
+				openingPhase === 'choosing'
+					? `The directory picker failed: ${message(pickError)}`
+					: `The selected directory could not be inspected: ${message(pickError)}`;
 		} finally {
+			openingPhase = 'idle';
 			busy = false;
 		}
 	}
@@ -350,7 +365,11 @@
 		{:else if capability === 'picker'}
 			<div class="actions">
 				<button onclick={pickWorkspace} disabled={busy}>
-					{busy ? 'Opening...' : 'Open Audio Workspace'}
+					{openingPhase === 'choosing'
+						? 'Choose a folder...'
+						: openingPhase === 'inspecting'
+							? 'Inspecting...'
+							: 'Open Audio Workspace'}
 				</button>
 				<span class="muted">Read/write directory access</span>
 			</div>
