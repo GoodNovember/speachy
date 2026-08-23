@@ -70,6 +70,8 @@ Enable `SPEACHY_RUN_LONGFORM_TRANSCRIPTION_BENCHMARK=1` and run `npm run test:be
 
 The first scored Chapter 1 run used 70 identical 29-second windows and a 5,828-word normalized reference. Parakeet produced 1.96% WER at RTF 0.147, native Whisper tiny.en produced 4.98% WER at RTF 0.161, and Python faster-whisper-tiny produced 14.04% WER at RTF 0.067. Parakeet is therefore the preferred native English model on this machine, trading roughly 1.35 GiB peak Node RSS for its quality lead; broader accents, noise conditions, and timestamp accuracy remain unmeasured.
 
+The representative-corpus plan is serialized in [`tests/fixtures/evaluation/README.md`](tests/fixtures/evaluation/README.md). It defines a three-tier ladder—public-domain long-form reading, deterministic synthetic conversation mixtures, and a manually reviewed Internet Archive television-news subset—along with ownership, manifest, annotation, metric, and opt-in execution boundaries.
+
 ## ffmpeg
 
 MP3, Opus, FLAC, and AAC encoding requires an ffmpeg executable. Install ffmpeg through the host operating system or container image and keep it on `PATH`; Linux and macOS therefore use the normal `ffmpeg` command without any platform-specific path. Set `FFMPEG_PATH` when the binary lives elsewhere.

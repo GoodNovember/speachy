@@ -248,7 +248,13 @@ One executor at a time, easiest and most verifiable first.
   - The scored three-way run used a checked-in 5,828-word reference and the same 70 explicit 29-second windows for every backend. Parakeet measured 1.96% WER (114 errors: 63 substitutions / 29 deletions / 22 insertions) at RTF 0.147 and 1348.9 MiB peak Node RSS. Native Whisper measured 4.98% WER (290 errors) at RTF 0.161 and 820.7 MiB. Python faster-whisper-tiny measured 14.04% WER (818 errors) at RTF 0.067; its child-process RSS was not measured. Parakeet and Python returned 5769 and 5237 structurally valid word spans respectively; independent timestamp accuracy remains unmeasured.
 - [x] Record the first Windows CPU smoke evidence on the 1.3235-second checked-in WAV: faster-whisper/CTranslate2 INT8 was 8356 ms cold and 1045 ms warm (RTF 6.31 / 0.79), while sherpa Whisper ONNX INT8 was 1167 ms cold and 193 ms warm (RTF 0.88 / 0.15). Both produced the expected phrase; this fixture is proof of viability, not a quality verdict
 - [x] Expand the short smoke fixture into a scored one-chapter quality gate with pinned reference provenance, WER/edit counts, real-time factor, native memory, and structural timestamp coverage
+- [x] Serialize the representative-corpus contract in [`web/tests/fixtures/evaluation/README.md`](web/tests/fixtures/evaluation/README.md): public-domain long-form truth, deterministic synthetic conversations, and a manually reviewed Internet Archive television-news subset remain distinct evidence tiers
 - [ ] Expand the one-reader gate to a representative corpus and independently aligned excerpts before making broader quality or timestamp-accuracy claims
+  - [ ] Define strict v1 schemas for the shared corpus envelope, synthetic conversation recipes, and TV-news candidate manifests
+  - [ ] Render a deterministic opt-in two-speaker, six-minute _Dracula_ mixture with exact turn and overlap ground truth
+  - [ ] Score transcription and the existing Python diarization baseline on that mixture before adding a third pseudo-speaker
+  - [ ] Curate twelve TV-news candidates as metadata-only records: four clean reports, four interviews, and four overlap/remote/noise cases
+  - [ ] Preserve raw captions as silver evidence and manually promote only reviewed transcript and speaker-turn annotations to gold
 
 - [ ] Kokoro TTS on `sherpa-onnx` — verify by ear against the Python output
 - [ ] Piper TTS on `sherpa-onnx`
