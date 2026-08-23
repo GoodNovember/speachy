@@ -24,6 +24,7 @@
 		type WorkspaceAudioFile,
 		type WorkspaceAudioStatus
 	} from '$lib/workspace/inventory';
+	import WorkspaceWaveform from '$lib/workspace/WorkspaceWaveform.svelte';
 
 	type DirectoryPicker = (options: { mode: 'readwrite' }) => Promise<PermissionedDirectoryHandle>;
 	type WorkspaceSource =
@@ -562,6 +563,7 @@
 			</div>
 		{/if}
 	</section>
+	<WorkspaceWaveform file={selectedAudio?.file ?? null} />
 {:else if view.status === 'newer-schema'}
 	<section class="card result warning">
 		<p class="step">Compatibility boundary</p>
