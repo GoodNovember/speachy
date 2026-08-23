@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { projectTranscriptTimeline, type TranscriptTimelineItem } from './timeline-layout';
+	import type { TimedAnnotationDocument } from './timed-annotations';
 	import {
 		MAX_WAVEFORM_RASTER_WIDTH,
 		calculateWaveformPeaks,
@@ -10,7 +12,15 @@
 		waveformXForTime
 	} from './waveform';
 
-	let { file }: { file: File | null } = $props();
+	let {
+		file,
+		annotations = null,
+		annotationSource = 'Transcript fixture'
+	}: {
+		file: File | null;
+		annotations?: TimedAnnotationDocument | null;
+		annotationSource?: string;
+	} = $props();
 
 	type DecodeState =
 		| { status: 'idle' }
@@ -34,9 +44,15 @@
 		`${formatWaveformTime(currentTime)} / ${formatWaveformTime(duration)}`
 	);
 	const density = $derived(duration > 0 ? renderWidth / duration : 0);
+	const transcript = $derived(projectTranscriptTimeline(annotations, duration, renderWidth));
 
 	function message(error: unknown): string {
 		return error instanceof Error ? error.message : String(error);
+	}
+
+	function annotationAriaLabel(item: TranscriptTimelineItem): string {
+		const kind = item.kind === 'transcript-segment' ? 'Segment' : 'Word';
+		return `${kind}: ${item.text}, ${formatWaveformTime(item.start)} to ${formatWaveformTime(item.end)}, ${item.status}`;
 	}
 
 	function stopPlayheadAnimation(): void {
@@ -196,11 +212,11 @@
 	onDestroy(stopPlayheadAnimation);
 </script>
 
-<section class="waveform-card" aria-label="Selected recording waveform">
+<section class="waveform-card" aria-label="Selected recording timeline">
 	<div class="waveform-heading">
 		<div>
 			<p class="step">03 / Inspect the recording</p>
-			<h2>Waveform and playback</h2>
+			<h2>Timeline and playback</h2>
 		</div>
 		{#if file !== null}
 			<span class="time-readout">{timeLabel}</span>
@@ -240,6 +256,14 @@
 			</p>
 		{/if}
 
+		{#if annotations !== null}
+			<div class="transcript-key" aria-label="Transcript timeline legend">
+				<span><i class="segment-swatch"></i>Segments</span>
+				<span><i class="word-swatch"></i>Words</span>
+				<strong>{annotationSource}</strong>
+			</div>
+		{/if}
+
 		<div class="waveform-scroll" role="region" aria-label="Horizontally scrollable waveform">
 			<div class="waveform-stage" style:width={`${renderWidth}px`}>
 				<canvas
@@ -256,12 +280,51 @@
 					aria-valuenow={currentTime}
 					aria-valuetext={timeLabel}
 				></canvas>
+				{#if annotations !== null}
+					<div class="transcript-lanes" aria-label="Timestamp-aligned transcript">
+						<ol class="annotation-lane segment-lane" aria-label="Transcript segments">
+							{#each transcript.segments as segment (segment.id)}
+								<li
+									class:provisional={segment.status === 'provisional'}
+									class="annotation-block segment-block"
+									style:left={`${segment.left}px`}
+									style:width={`${segment.width}px`}
+									data-annotation-id={segment.id}
+									data-start={segment.start}
+									data-end={segment.end}
+									aria-label={annotationAriaLabel(segment)}
+									title={annotationAriaLabel(segment)}
+								>
+									{segment.text}
+								</li>
+							{/each}
+						</ol>
+						<ol class="annotation-lane word-lane" aria-label="Transcript words">
+							{#each transcript.words as word (word.id)}
+								<li
+									class:provisional={word.status === 'provisional'}
+									class="annotation-block word-block"
+									style:left={`${word.left}px`}
+									style:width={`${word.width}px`}
+									data-annotation-id={word.id}
+									data-start={word.start}
+									data-end={word.end}
+									aria-label={annotationAriaLabel(word)}
+									title={annotationAriaLabel(word)}
+								>
+									{word.text}
+								</li>
+							{/each}
+						</ol>
+					</div>
+				{/if}
 				<div class="playhead" style:left={`${playheadX}px`} aria-hidden="true"></div>
 			</div>
 		</div>
 		<p class="waveform-help">
 			Scroll horizontally with the browser. Click the waveform to seek; use Left/Right for one
-			second or Shift for five.
+			second or Shift for five. Transcript geometry is fixture-backed until analysis transport is
+			connected.
 		</p>
 	{/if}
 </section>
@@ -332,6 +395,45 @@
 		color: var(--danger);
 	}
 
+	.transcript-key {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.55rem 1.1rem;
+		border-top: 1px solid var(--rule);
+		font-family: var(--mono);
+		font-size: 0.68rem;
+		color: var(--ink-3);
+	}
+
+	.transcript-key span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.transcript-key strong {
+		margin-left: auto;
+		font-weight: 500;
+		color: var(--accent-ink);
+	}
+
+	.transcript-key i {
+		display: inline-block;
+		width: 0.75rem;
+		height: 0.4rem;
+		border: 1px solid var(--accent);
+		border-radius: 2px;
+	}
+
+	.segment-swatch {
+		background: color-mix(in srgb, var(--accent-wash), var(--surface) 35%);
+	}
+
+	.word-swatch {
+		background: var(--accent-wash);
+	}
+
 	.waveform-scroll {
 		overflow-x: auto;
 		overflow-y: hidden;
@@ -349,7 +451,6 @@
 	.waveform-stage {
 		position: relative;
 		min-width: 100%;
-		height: 164px;
 	}
 
 	canvas {
@@ -363,6 +464,56 @@
 		outline-offset: -3px;
 	}
 
+	.transcript-lanes {
+		position: relative;
+		border-top: 1px solid var(--rule);
+		background: var(--surface);
+	}
+
+	.annotation-lane {
+		position: relative;
+		height: 2.75rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		overflow: hidden;
+	}
+
+	.annotation-lane + .annotation-lane {
+		border-top: 1px solid var(--rule);
+	}
+
+	.annotation-block {
+		position: absolute;
+		top: 0.35rem;
+		bottom: 0.35rem;
+		box-sizing: border-box;
+		min-width: 1px;
+		padding: 0.35rem 0.45rem;
+		border: 1px solid var(--accent);
+		border-radius: 3px;
+		overflow: hidden;
+		font-size: 0.72rem;
+		line-height: 1.2;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.segment-block {
+		background: color-mix(in srgb, var(--accent-wash), var(--surface) 35%);
+		color: var(--accent-ink);
+	}
+
+	.word-block {
+		background: var(--accent-wash);
+		color: var(--ink);
+	}
+
+	.annotation-block.provisional {
+		border-style: dashed;
+		opacity: 0.78;
+	}
+
 	.playhead {
 		position: absolute;
 		top: 0;
@@ -372,6 +523,7 @@
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface), transparent 45%);
 		pointer-events: none;
 		transform: translateX(-1px);
+		z-index: 2;
 	}
 
 	.waveform-help {
@@ -388,6 +540,16 @@
 		audio {
 			min-width: 0;
 			max-width: none;
+		}
+
+		.transcript-key {
+			align-items: flex-start;
+			flex-wrap: wrap;
+		}
+
+		.transcript-key strong {
+			width: 100%;
+			margin-left: 0;
 		}
 	}
 </style>

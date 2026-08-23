@@ -191,7 +191,7 @@ This is the acceptance surface for the native transcription and diarization endp
 - [ ] Build the inspection timeline fixture-first, then connect it to the same-origin APIs
   - [x] Define a transport- and storage-neutral timed-annotation model that can add, revise, and finalize transcript words, transcript segments, and speaker turns instead of assuming immutable completed arrays — versioned plain-data documents replay strict external events immutably, retain provisional/final state and per-annotation revisions, and expose deterministic filtered views without owning API or filesystem transport
   - [x] Browser-decoded waveform and native audio playback share one seekable playhead — the decoded duration sizes a wide canvas at a stable pixels-per-second density, its container delegates horizontal navigation to native browser scrolling, and pointer/keyboard seeking stays synchronized with the native audio element
-  - [ ] Transcription segments and words align horizontally by timestamp
+  - [x] Transcription segments and words align horizontally by timestamp — a fixture-backed transport-neutral document projects immutable annotations onto dedicated segment and word lanes using the waveform's shared time scale and native horizontal scroll boundary
   - [ ] Diarization renders one lane per speaker so overlaps remain visible; speaker labels map deterministically into a small accessible palette and remain visible as text
   - [ ] Clicking a word seeks to it; clicking a speaker turn selects or loops that interval
   - [ ] Surface gaps, overlaps, out-of-range timestamps, duration mismatches, and words crossing speaker boundaries without rewriting the source responses

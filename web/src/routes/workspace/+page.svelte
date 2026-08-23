@@ -25,6 +25,7 @@
 		type WorkspaceAudioStatus
 	} from '$lib/workspace/inventory';
 	import WorkspaceWaveform from '$lib/workspace/WorkspaceWaveform.svelte';
+	import { WORKSPACE_TIMELINE_FIXTURE_DOCUMENT } from '$lib/workspace/timeline-fixture';
 
 	type DirectoryPicker = (options: { mode: 'readwrite' }) => Promise<PermissionedDirectoryHandle>;
 	type WorkspaceSource =
@@ -546,8 +547,8 @@
 
 						{#if selectedAudio.analysis.status === 'unprocessed'}
 							<p class="analysis-copy">
-								No analysis is associated with this source file yet. The upcoming timeline slice
-								will consume this selected-file boundary.
+								No analysis is associated with this source file yet. The fixture transcript below
+								demonstrates the shared timeline geometry without claiming a completed analysis.
 							</p>
 						{:else if selectedAudio.analysis.status === 'ready'}
 							<p class="analysis-copy">
@@ -563,7 +564,11 @@
 			</div>
 		{/if}
 	</section>
-	<WorkspaceWaveform file={selectedAudio?.file ?? null} />
+	<WorkspaceWaveform
+		file={selectedAudio?.file ?? null}
+		annotations={WORKSPACE_TIMELINE_FIXTURE_DOCUMENT}
+		annotationSource="Fixture transcript · API pending"
+	/>
 {:else if view.status === 'newer-schema'}
 	<section class="card result warning">
 		<p class="step">Compatibility boundary</p>
