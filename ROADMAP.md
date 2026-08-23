@@ -50,10 +50,11 @@ Locked decisions. Add to this as open questions resolve.
 - **The persistent inspector lives at `/workspace`; shared timeline primitives know neither folders nor sockets.** `/stt` remains a stateless one-file playground, `/mic` remains a capture check, and `/v1/*` remains the compatibility API. Waveform, capture, playhead, timed-annotation, speaker-lane, selection, and diagnostics modules accept both final batch results and provisional realtime updates without owning directory handles, IndexedDB, WebSockets, or artifact writes.
 - **Native inference proof now precedes further workspace work.** The workspace branch is paused after the portable manifest, inventory, waveform, transcript lanes, and directory-picker state fix. Speachy must first prove that a production SvelteKit server can transcribe through a Node-native executor with Python unavailable; the separate desktop-workbench project can own Electron-specific workspace ergonomics.
 - **Inference backend selection is explicit.** `INFERENCE_BACKEND=hybrid` prefers compatible native executors and retains Python fallbacks, `native` exposes only Node-native tasks, and `python` preserves the comparison baseline. A CTranslate2 cache entry and a sherpa ONNX artifact use distinct model IDs because their files are not interchangeable.
+- **Parakeet v2 INT8 is the preferred native English STT model on the current Windows CPU.** The scored Chapter 1 gate measured 1.96% WER at RTF 0.147, versus native Whisper tiny.en at 4.98% / 0.161 and Python faster-whisper-tiny at 14.04% / 0.067. This is a local one-reader result, not a universal quality claim; Parakeet's roughly 1.35 GiB peak Node RSS and unmeasured timestamp accuracy remain explicit tradeoffs.
 
 ### Open questions
 
-- [ ] Does ONNX Runtime Whisper hold up against the CTranslate2 INT8 baseline on our hardware? Blocks the Phase 4 Whisper swap. Needs a real benchmark, not a vibe check.
+- [ ] Does Parakeet's Chapter 1 advantage generalize across speakers, accents, noise, and conversational audio? The single-reader long-form gate supports the current local recommendation but not a universal winner.
 - [ ] Does diarization stay in Python permanently? `sherpa-onnx` supports it, but Pyannote is the quality reference and this is the least-used endpoint.
 - [ ] Do we keep the WebRTC endpoint at all, or is WebSocket sufficient for the clients we care about? `werift` is the `aiortc` replacement but is materially less battle-tested.
 
@@ -243,15 +244,17 @@ One executor at a time, easiest and most verifiable first.
   - The initial fixture is Chapter 1 of LibriVox's public-domain _Dracula_ Version 3 recording. From `web`, set `SPEACHY_LONGFORM_CORPUS` to the directory containing `dracula_01_stoker_64kb.mp3`, enable the gate, and run `npm run test:benchmark:longform`.
   - The first run exposed sherpa Whisper's hard 30-second input limit: an oversized call returned only 51 opening words while reporting success. The native executor now splits every speech range into 29-second windows before inference, so an oversized buffer cannot be silently discarded.
   - First complete Chapter 1 evidence on the same Windows CPU: 2020.76 seconds of audio produced 5781 words across 70 windows in 359154 ms (RTF 0.178, about 5.6x real time), with an 816 MiB peak Node RSS. This proves long-form coverage and throughput, not transcript quality; word timestamps remain unavailable.
-  - The controlled Whisper/Parakeet run held the same 29-second windows and two model threads. Parakeet v2 INT8 completed in 294365 ms (RTF 0.146) versus Whisper tiny.en's 333058 ms (RTF 0.165), about 11.6% faster, while using 1342 MiB peak RSS versus 820 MiB. Parakeet returned 5769 monotonic token-derived word spans; Whisper still returned none. The Parakeet transcript is visibly cleaner, but WER remains unmeasured.
+  - The initial controlled Whisper/Parakeet run held the same 29-second windows and two model threads. Parakeet v2 INT8 completed in 294365 ms (RTF 0.146) versus Whisper tiny.en's 333058 ms (RTF 0.165), about 11.6% faster, while using 1342 MiB peak RSS versus 820 MiB. Parakeet returned 5769 monotonic token-derived word spans; Whisper still returned none. The Parakeet transcript was visibly cleaner, but that initial pass did not yet measure WER.
+  - The scored three-way run used a checked-in 5,828-word reference and the same 70 explicit 29-second windows for every backend. Parakeet measured 1.96% WER (114 errors: 63 substitutions / 29 deletions / 22 insertions) at RTF 0.147 and 1348.9 MiB peak Node RSS. Native Whisper measured 4.98% WER (290 errors) at RTF 0.161 and 820.7 MiB. Python faster-whisper-tiny measured 14.04% WER (818 errors) at RTF 0.067; its child-process RSS was not measured. Parakeet and Python returned 5769 and 5237 structurally valid word spans respectively; independent timestamp accuracy remains unmeasured.
 - [x] Record the first Windows CPU smoke evidence on the 1.3235-second checked-in WAV: faster-whisper/CTranslate2 INT8 was 8356 ms cold and 1045 ms warm (RTF 6.31 / 0.79), while sherpa Whisper ONNX INT8 was 1167 ms cold and 193 ms warm (RTF 0.88 / 0.15). Both produced the expected phrase; this fixture is proof of viability, not a quality verdict
-- [ ] Expand the Whisper comparison from the short smoke fixture to a representative corpus before resolving the quality/performance gate; record real-time factor, memory, transcript quality, and timestamp quality
+- [x] Expand the short smoke fixture into a scored one-chapter quality gate with pinned reference provenance, WER/edit counts, real-time factor, native memory, and structural timestamp coverage
+- [ ] Expand the one-reader gate to a representative corpus and independently aligned excerpts before making broader quality or timestamp-accuracy claims
 
 - [ ] Kokoro TTS on `sherpa-onnx` — verify by ear against the Python output
 - [ ] Piper TTS on `sherpa-onnx`
 - [ ] WeSpeaker speaker embedding on `sherpa-onnx`
-- [ ] Benchmark ONNX Runtime Whisper against the CTranslate2 baseline; record the numbers here before deciding
-- [ ] Whisper STT on `sherpa-onnx`, gated on that benchmark
+- [x] Benchmark sherpa-onnx Whisper and Parakeet against the CTranslate2 baseline; record the numbers here before deciding
+- [x] Whisper STT on `sherpa-onnx`, worker-isolated and verified through the native-only production HTTP boundary
 - [x] Parakeet TDT v2 INT8 STT on `sherpa-onnx`, with a distinct model identity, worker-isolated transducer executor, native-only HTTP proof, token-derived word timestamps, and controlled short/long comparison evidence
 - [ ] Pyannote diarization — port or consciously leave in Python
 - [ ] GPU path: ONNX Runtime CUDA from Node, verified in Docker

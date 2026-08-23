@@ -64,7 +64,11 @@ tar -xf models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2 -C models
 
 The validated archive SHA-256 is `157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad`. The conversion derives from NVIDIA's `parakeet-tdt-0.6b-v2`, licensed CC BY 4.0. Set `SPEACHY_SHERPA_PARAKEET_MODEL_DIR` to use another location. Native model directories and benchmark output are local-only and ignored by Git.
 
-The opt-in long-form comparison uses the checked-in LibriVox provenance manifest but reads audio from `SPEACHY_LONGFORM_CORPUS`. Enable `SPEACHY_RUN_LONGFORM_TRANSCRIPTION_BENCHMARK=1` and run `npm run test:benchmark:longform`; versioned evidence is written under ignored `web/test-results/`.
+The opt-in long-form quality comparison uses a checked-in LibriVox provenance manifest and a curated Chapter 1 reference derived from the recording's [Project Gutenberg source text](https://www.gutenberg.org/ebooks/345). Audio is never copied into the repository: `SPEACHY_LONGFORM_CORPUS` must point to the machine-local directory containing the MP3. The harness requires the Python faster-whisper baseline and both native artifacts, runs all three sequentially with two model threads, and reports WER, edit counts, real-time factor, structural timestamp coverage, and native Node RSS. Python child-process memory and timestamp accuracy are explicitly left unmeasured.
+
+Enable `SPEACHY_RUN_LONGFORM_TRANSCRIPTION_BENCHMARK=1` and run `npm run test:benchmark:longform`; versioned JSON evidence and a concise Markdown summary are written under ignored `web/test-results/`.
+
+The first scored Chapter 1 run used 70 identical 29-second windows and a 5,828-word normalized reference. Parakeet produced 1.96% WER at RTF 0.147, native Whisper tiny.en produced 4.98% WER at RTF 0.161, and Python faster-whisper-tiny produced 14.04% WER at RTF 0.067. Parakeet is therefore the preferred native English model on this machine, trading roughly 1.35 GiB peak Node RSS for its quality lead; broader accents, noise conditions, and timestamp accuracy remain unmeasured.
 
 ## ffmpeg
 

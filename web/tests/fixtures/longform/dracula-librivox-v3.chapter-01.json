@@ -1,5 +1,5 @@
 {
-	"schemaVersion": 1,
+	"schemaVersion": 2,
 	"id": "librivox-dracula-v3-chapter-01",
 	"title": "Dracula (Version 3), Chapter 1",
 	"author": "Bram Stoker",
@@ -8,5 +8,14 @@
 	"audioFile": "dracula_01_stoker_64kb.mp3",
 	"minimumExpectedWords": 1000,
 	"sourceUrl": "https://librivox.org/dracula-by-bram-stoker-2/",
-	"publicDomainUrl": "https://librivox.org/pages/public-domain/"
+	"publicDomainUrl": "https://librivox.org/pages/public-domain/",
+	"reference": {
+		"file": "dracula-librivox-v3.chapter-01.reference.txt",
+		"sha256": "2e178eb71c5f137e0b9a142635aa24889912c49fda2a0cd566488213a226d55c",
+		"kind": "curated-spoken-transcript",
+		"bodySourceUrl": "https://www.gutenberg.org/ebooks/345",
+		"bodySourceFileUrl": "https://www.gutenberg.org/cache/epub/345/pg345.txt",
+		"bodySourceFileSha256": "96cd16eacdbfebae8fdda5591f66e0cc8ee76be18e0cd1aca02bc00615782d28",
+		"wrapper": "LibriVox opening and closing notices transcribed for this recording"
+	}
 }
