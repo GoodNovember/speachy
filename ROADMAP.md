@@ -55,7 +55,7 @@ Locked decisions. Add to this as open questions resolve.
 ### Open questions
 
 - [ ] Does Parakeet's Chapter 1 advantage generalize across speakers, accents, noise, and conversational audio? The single-reader long-form gate supports the current local recommendation but not a universal winner.
-- [ ] Does diarization stay in Python permanently? `sherpa-onnx` supports it, but Pyannote is the quality reference and this is the least-used endpoint.
+- [ ] Does Pyannote Community-1 remain the diarization quality path? Native sherpa capability is now proven, but its fast-clustering bundle still needs a scored comparison against Community-1 before it can replace the Python reference.
 - [ ] Do we keep the WebRTC endpoint at all, or is WebSocket sufficient for the clients we care about? `werift` is the `aiortc` replacement but is materially less battle-tested.
 
 ---
@@ -262,7 +262,9 @@ One executor at a time, easiest and most verifiable first.
 - [x] Benchmark sherpa-onnx Whisper and Parakeet against the CTranslate2 baseline; record the numbers here before deciding
 - [x] Whisper STT on `sherpa-onnx`, worker-isolated and verified through the native-only production HTTP boundary
 - [x] Parakeet TDT v2 INT8 STT on `sherpa-onnx`, with a distinct model identity, worker-isolated transducer executor, native-only HTTP proof, token-derived word timestamps, and controlled short/long comparison evidence
-- [ ] Pyannote diarization — port or consciously leave in Python
+- [x] Native sherpa diarization with Pyannote 3.0 segmentation plus English WeSpeaker ResNet34-LM embeddings — distinct model identity, worker isolation, automatic or fixed clustering, stable speaker labels, and a two-speaker production HTTP proof
+  - The built server ran with `INFERENCE_BACKEND=native` and a deliberately invalid `SPEACHY_PYTHON`; sherpa's official 16-second English fixture returned HTTP 200 with four valid turns spanning both requested labels, `SPEAKER_00` and `SPEAKER_01`.
+- [ ] Score native sherpa diarization against Pyannote Community-1 on the deterministic conversation fixture, then consciously choose the default quality path
 - [ ] GPU path: ONNX Runtime CUDA from Node, verified in Docker
 - [ ] Rewrite the `Dockerfile` and compose files for a Node runtime
 - [ ] Delete the Python inference worker, `pyproject.toml`, `uv.lock`, `flake.nix`

@@ -5,6 +5,7 @@ import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
 import { PythonSpeechExecutor } from './python-speech.ts';
 import { PythonTranscriptionExecutor } from './python-transcription.ts';
+import { SherpaDiarizationExecutor } from './sherpa-diarization.ts';
 import { SherpaParakeetTranscriptionExecutor } from './sherpa-parakeet-transcription.ts';
 import { SherpaWhisperTranscriptionExecutor } from './sherpa-transcription.ts';
 import { SileroVadExecutor } from './silero-vad.ts';
@@ -21,6 +22,7 @@ import type {
 const nativeVadExecutor = new SileroVadExecutor();
 let nativeWhisperExecutor: SherpaWhisperTranscriptionExecutor | undefined;
 let nativeParakeetExecutor: SherpaParakeetTranscriptionExecutor | undefined;
+let nativeDiarizationExecutor: SherpaDiarizationExecutor | undefined;
 
 const lazyPythonWorker = {
 	async request(
@@ -66,6 +68,16 @@ export function composeTranscriptionExecutors(
 	return [...nativeExecutors, pythonExecutor];
 }
 
+export function composeDiarizationExecutors(
+	backend: Config['inferenceBackend'],
+	nativeExecutor: DiarizationExecutor,
+	pythonExecutor: DiarizationExecutor
+): readonly DiarizationExecutor[] {
+	if (backend === 'native') return [nativeExecutor];
+	if (backend === 'python') return [pythonExecutor];
+	return [nativeExecutor, pythonExecutor];
+}
+
 // This is the composition boundary for native routes. Route files depend only
 // on executor interfaces; concrete Python adapters stay contained here and can
 // be replaced by worker-thread implementations in Phase 4.
@@ -75,8 +87,14 @@ export function getSpeakerEmbeddingExecutors(): readonly SpeakerEmbeddingExecuto
 }
 
 export function getDiarizationExecutors(): readonly DiarizationExecutor[] {
-	if (config().inferenceBackend === 'native') return [];
-	return [new PythonDiarizationExecutor(lazyPythonWorker)];
+	nativeDiarizationExecutor ??= new SherpaDiarizationExecutor({
+		workerCount: config().inferenceWorkers
+	});
+	return composeDiarizationExecutors(
+		config().inferenceBackend,
+		nativeDiarizationExecutor,
+		new PythonDiarizationExecutor(lazyPythonWorker)
+	);
 }
 
 export function getTranscriptionExecutors(): readonly TranscriptionExecutor[] {

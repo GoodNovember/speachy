@@ -60,6 +60,23 @@ export async function _diarizationResponse(
 	if (responseFormat !== 'json' && responseFormat !== 'rttm') {
 		return validationError('response_format', "Input should be 'json' or 'rttm'", requestedFormat);
 	}
+	const requestedNumSpeakers = form.get('num_speakers');
+	let numSpeakers: number | undefined;
+	if (requestedNumSpeakers !== null && requestedNumSpeakers !== '') {
+		if (
+			typeof requestedNumSpeakers !== 'string' ||
+			!/^\d+$/.test(requestedNumSpeakers) ||
+			Number(requestedNumSpeakers) < 1 ||
+			!Number.isSafeInteger(Number(requestedNumSpeakers))
+		) {
+			return validationError(
+				'num_speakers',
+				'Input should be a positive integer',
+				requestedNumSpeakers
+			);
+		}
+		numSpeakers = Number(requestedNumSpeakers);
+	}
 
 	if (form.has('known_speaker_names[]') || form.has('known_speaker_references[]')) {
 		return Response.json(
@@ -87,7 +104,10 @@ export async function _diarizationResponse(
 	}
 
 	try {
-		const segments = await executor.diarize({ audio, modelId: model }, signal);
+		const segments = await executor.diarize(
+			{ audio, modelId: model, ...(numSpeakers === undefined ? {} : { numSpeakers }) },
+			signal
+		);
 		if (responseFormat === 'rttm') {
 			return new Response(rttm(segments, audio.name ?? 'audio'), {
 				headers: { 'content-type': 'text/plain; charset=utf-8' }

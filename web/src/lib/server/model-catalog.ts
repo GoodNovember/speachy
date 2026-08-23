@@ -2,6 +2,12 @@ import type { CachedRepoInfo } from '@huggingface/hub';
 import type { Model, ModelTask, Voice } from '$lib/types/api';
 import { loadConfig, type Config } from './config.ts';
 import {
+	hasSherpaDiarizationModel,
+	resolveSherpaDiarizationModelPaths,
+	SHERPA_DIARIZATION_MODEL_ID,
+	sherpaDiarizationCreatedAt
+} from './native-diarization.ts';
+import {
 	hasSherpaParakeetModel,
 	resolveSherpaParakeetModelPaths,
 	SHERPA_PARAKEET_MODEL_ID,
@@ -287,6 +293,17 @@ export async function listLocalModels(cacheDir?: string): Promise<CatalogModel[]
 				owned_by: 'sherpa-onnx',
 				language: ['en'],
 				task: 'automatic-speech-recognition'
+			});
+		}
+		const nativeDiarization = resolveSherpaDiarizationModelPaths();
+		if (hasSherpaDiarizationModel(nativeDiarization)) {
+			models.push({
+				id: SHERPA_DIARIZATION_MODEL_ID,
+				created: await sherpaDiarizationCreatedAt(nativeDiarization),
+				object: 'model',
+				owned_by: 'sherpa-onnx',
+				language: ['en'],
+				task: 'speaker-diarization'
 			});
 		}
 	}

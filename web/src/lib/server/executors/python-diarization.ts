@@ -3,6 +3,7 @@ import {
 	listRemoteCatalogModelsByTask,
 	type CatalogModel
 } from '../model-catalog.ts';
+import { SHERPA_DIARIZATION_MODEL_ID } from '../native-diarization.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
 import { encodeRpcAudio } from './python-transcription.ts';
 import type {
@@ -26,7 +27,10 @@ type DiarizationCatalog = {
 };
 
 const catalog: DiarizationCatalog = {
-	listLocal: () => listLocalModelsByTask('speaker-diarization'),
+	listLocal: async () =>
+		(await listLocalModelsByTask('speaker-diarization')).filter(
+			(model) => model.id !== SHERPA_DIARIZATION_MODEL_ID
+		),
 	listRemote: () => listRemoteCatalogModelsByTask('speaker-diarization')
 };
 

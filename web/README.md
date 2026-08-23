@@ -64,6 +64,22 @@ tar -xf models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2 -C models
 
 The validated archive SHA-256 is `157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad`. The conversion derives from NVIDIA's `parakeet-tdt-0.6b-v2`, licensed CC BY 4.0. Set `SPEACHY_SHERPA_PARAKEET_MODEL_DIR` to use another location. Native model directories and benchmark output are local-only and ignored by Git.
 
+Native speaker diarization uses the distinct bundle ID `sherpa-onnx/pyannote-segmentation-3.0+wespeaker-voxceleb-resnet34-LM`. It combines sherpa's Pyannote 3.0 segmentation ONNX with the English WeSpeaker VoxCeleb ResNet34-LM embedding ONNX and sherpa's fast clustering. This is not the cached `pyannote/speaker-diarization-community-1` pipeline, which retains its own VBx/PLDA clustering and remains the Python quality reference.
+
+Provision both official release artifacts into one ignored directory:
+
+```sh
+mkdir -p models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM
+curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 -o models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM/segmentation.tar.bz2
+tar -xf models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM/segmentation.tar.bz2 -C models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM
+cp models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM/sherpa-onnx-pyannote-segmentation-3-0/model.onnx models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM/segmentation.onnx
+curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/wespeaker_en_voxceleb_resnet34_LM.onnx -o models/sherpa-onnx-pyannote-segmentation-3-0-wespeaker-en-voxceleb-resnet34-LM/wespeaker_en_voxceleb_resnet34_LM.onnx
+```
+
+The validated SHA-256 values are `24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488` for the segmentation archive, `220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079` for the extracted segmentation ONNX, and `e9848563da86f263117134dfd7ad63c92355b37de492b55e325400c9d9c39012` for the embedding ONNX. Each sherpa release model retains its upstream license; Pyannote segmentation 3.0 and WeSpeaker are separate upstream artifacts. Set `SPEACHY_SHERPA_DIARIZATION_MODEL_DIR` to use another location.
+
+The opt-in real endpoint proof uses sherpa's official `1-two-speakers-en.wav` fixture by default. Put it in the bundle directory, set `SPEACHY_RUN_NATIVE_DIARIZATION_INTEGRATION=1`, and run `npx vitest run tests/integration/native-diarization.test.ts --maxWorkers=1`. `SPEACHY_SHERPA_DIARIZATION_AUDIO` can point to another local WAV. This proves the native HTTP contract and fixed speaker count; it is not a diarization-error-rate quality claim.
+
 The opt-in long-form quality comparison uses a checked-in LibriVox provenance manifest and a curated Chapter 1 reference derived from the recording's [Project Gutenberg source text](https://www.gutenberg.org/ebooks/345). Audio is never copied into the repository: `SPEACHY_LONGFORM_CORPUS` must point to the machine-local directory containing the MP3. The harness requires the Python faster-whisper baseline and both native artifacts, runs all three sequentially with two model threads, and reports WER, edit counts, real-time factor, structural timestamp coverage, and native Node RSS. Python child-process memory and timestamp accuracy are explicitly left unmeasured.
 
 Enable `SPEACHY_RUN_LONGFORM_TRANSCRIPTION_BENCHMARK=1` and run `npm run test:benchmark:longform`; versioned JSON evidence and a concise Markdown summary are written under ignored `web/test-results/`.

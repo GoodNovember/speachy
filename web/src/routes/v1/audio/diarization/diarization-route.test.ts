@@ -64,6 +64,24 @@ describe('POST /v1/audio/diarization', () => {
 		);
 	});
 
+	it('forwards an optional fixed speaker count', async () => {
+		const diarize = vi.fn(async () => []);
+		const form = diarizationForm();
+		form.set('num_speakers', '2');
+		const signal = new AbortController().signal;
+		const response = await _diarizationResponse(
+			form,
+			signal,
+			[executor({ diarize })],
+			decodedAudio
+		);
+		expect(response.status).toBe(200);
+		expect(diarize).toHaveBeenCalledWith(
+			expect.objectContaining({ modelId: 'org/pyannote', numSpeakers: 2 }),
+			signal
+		);
+	});
+
 	it('formats segments as RTTM with the uploaded file stem', async () => {
 		const response = await _diarizationResponse(
 			diarizationForm('rttm'),
@@ -98,6 +116,16 @@ describe('POST /v1/audio/diarization', () => {
 		expect(await invalid.json()).toMatchObject({
 			detail: [{ loc: ['body', 'response_format'] }]
 		});
+
+		for (const value of ['0', '-1', '1.5', 'two']) {
+			const form = diarizationForm();
+			form.set('num_speakers', value);
+			const invalidCount = await _diarizationResponse(form, signal, []);
+			expect(invalidCount.status).toBe(422);
+			expect(await invalidCount.json()).toMatchObject({
+				detail: [{ loc: ['body', 'num_speakers'] }]
+			});
+		}
 	});
 
 	it('returns 404 without decoding when no installed executor handles the model', async () => {
