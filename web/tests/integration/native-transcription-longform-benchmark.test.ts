@@ -7,12 +7,22 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { decodeAudioUpload } from '../../src/lib/server/audio-decode.ts';
 import {
+	hasSherpaParakeetModel,
+	resolveSherpaParakeetModelPaths,
+	SHERPA_PARAKEET_MODEL_ID
+} from '../../src/lib/server/native-parakeet.ts';
+import {
 	hasSherpaWhisperModel,
 	resolveSherpaWhisperModelPaths,
 	SHERPA_WHISPER_MODEL_ID
 } from '../../src/lib/server/native-whisper.ts';
+import { SherpaParakeetTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-parakeet-transcription.ts';
 import { SherpaWhisperTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-transcription.ts';
-import type { Audio, TranscriptionRequest } from '../../src/lib/server/executors/types.ts';
+import type {
+	Audio,
+	TranscriptionExecutor,
+	TranscriptionRequest
+} from '../../src/lib/server/executors/types.ts';
 import corpusManifest from '../fixtures/longform/dracula-librivox-v3.chapter-01.json';
 
 const WEB_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -25,6 +35,11 @@ async function sha256(filePath: string): Promise<string> {
 	return hash.digest('hex');
 }
 
+async function modelFile(filePath: string) {
+	const file = await stat(filePath);
+	return { fileName: basename(filePath), byteLength: file.size, sha256: await sha256(filePath) };
+}
+
 async function decodeMp3(filePath: string): Promise<Audio> {
 	const bytes = await readFile(filePath);
 	const file = Object.assign(new Blob([bytes], { type: 'audio/mpeg' }), {
@@ -33,14 +48,14 @@ async function decodeMp3(filePath: string): Promise<Audio> {
 	return decodeAudioUpload(file, { signal: AbortSignal.timeout(300_000) });
 }
 
-function transcriptionRequest(audio: Audio): TranscriptionRequest {
+function transcriptionRequest(audio: Audio, model: string): TranscriptionRequest {
 	return {
 		audio,
-		model: SHERPA_WHISPER_MODEL_ID,
+		model,
 		language: corpusManifest.language,
 		responseFormat: 'verbose_json',
 		temperature: 0,
-		timestampGranularities: ['segment'],
+		timestampGranularities: ['segment', 'word'],
 		speechSegments: [{ start: 0, end: audio.data.length }],
 		vadOptions: {
 			threshold: 0.5,
@@ -49,12 +64,15 @@ function transcriptionRequest(audio: Audio): TranscriptionRequest {
 			minSilenceDurationMs: 160,
 			speechPadMs: 400
 		},
-		withoutTimestamps: true
+		withoutTimestamps: false
 	};
 }
 
-async function measureNative(audio: Audio) {
-	const executor = new SherpaWhisperTranscriptionExecutor();
+async function measureNative(
+	audio: Audio,
+	model: string,
+	executor: TranscriptionExecutor & { close(): Promise<void> }
+) {
 	const startedAt = new Date();
 	const started = performance.now();
 	let peakRssBytes = process.memoryUsage().rss;
@@ -65,10 +83,18 @@ async function measureNative(audio: Audio) {
 
 	try {
 		const result = await executor.transcribe(
-			transcriptionRequest(audio),
+			transcriptionRequest(audio, model),
 			AbortSignal.timeout(1_800_000)
 		);
 		const elapsedMs = performance.now() - started;
+		const words = result.words ?? [];
+		const wordTimestampsMonotonic = words.every(
+			(word, index) =>
+				Number.isFinite(word.start) &&
+				Number.isFinite(word.end) &&
+				word.start <= word.end &&
+				(index === 0 || words[index - 1]!.start <= word.start)
+		);
 		return {
 			status: 'ok' as const,
 			startedAt: startedAt.toISOString(),
@@ -81,7 +107,10 @@ async function measureNative(audio: Audio) {
 			characterCount: result.text.length,
 			wordCount: result.text.trim() === '' ? 0 : result.text.trim().split(/\s+/).length,
 			segmentCount: result.segments?.length ?? 0,
-			wordTimestampCount: result.words?.length ?? 0
+			wordTimestampCount: words.length,
+			wordTimestampsMonotonic,
+			wordTimestampRange:
+				words.length === 0 ? null : { start: words[0]!.start, end: words.at(-1)!.end }
 		};
 	} catch (error) {
 		return {
@@ -98,8 +127,16 @@ async function measureNative(audio: Audio) {
 	}
 }
 
+function coverage(result: Awaited<ReturnType<typeof measureNative>>) {
+	return {
+		minimumExpectedWords: corpusManifest.minimumExpectedWords,
+		observedWordCount: result.status === 'ok' ? result.wordCount : 0,
+		passed: result.status === 'ok' && result.wordCount >= corpusManifest.minimumExpectedWords
+	};
+}
+
 describe.runIf(RUN_LONGFORM)('native transcription long-form benchmark', () => {
-	it('records an opt-in Chapter 1 evidence artifact', async () => {
+	it('records opt-in Whisper and Parakeet Chapter 1 evidence', async () => {
 		const corpusDirectory = process.env.SPEACHY_LONGFORM_CORPUS;
 		expect(
 			corpusDirectory,
@@ -108,29 +145,45 @@ describe.runIf(RUN_LONGFORM)('native transcription long-form benchmark', () => {
 		const audioPath = resolve(corpusDirectory!, corpusManifest.audioFile);
 		expect(existsSync(audioPath), `Long-form audio not found: ${audioPath}`).toBe(true);
 
-		const modelPaths = resolveSherpaWhisperModelPaths();
+		const whisperPaths = resolveSherpaWhisperModelPaths();
+		const parakeetPaths = resolveSherpaParakeetModelPaths();
+		expect(hasSherpaWhisperModel(whisperPaths), 'The native Whisper model is not installed').toBe(
+			true
+		);
 		expect(
-			hasSherpaWhisperModel(modelPaths),
-			'The native sherpa Whisper model is not installed'
+			hasSherpaParakeetModel(parakeetPaths),
+			'The native Parakeet model is not installed'
 		).toBe(true);
 
-		const [audioFile, inputSha256, encoder, decoder, tokens] = await Promise.all([
-			stat(audioPath),
+		const audioFile = await stat(audioPath);
+		const [inputSha256, whisperModel, parakeetModel] = await Promise.all([
 			sha256(audioPath),
-			sha256(modelPaths.encoder),
-			sha256(modelPaths.decoder),
-			sha256(modelPaths.tokens)
+			Promise.all([
+				modelFile(whisperPaths.encoder),
+				modelFile(whisperPaths.decoder),
+				modelFile(whisperPaths.tokens)
+			]),
+			Promise.all([
+				modelFile(parakeetPaths.encoder),
+				modelFile(parakeetPaths.decoder),
+				modelFile(parakeetPaths.joiner),
+				modelFile(parakeetPaths.tokens)
+			])
 		]);
 		const decoded = await decodeMp3(audioPath);
 		const durationSeconds = decoded.data.length / decoded.sampleRate;
-		const native = await measureNative(decoded);
-		const coverage = {
-			minimumExpectedWords: corpusManifest.minimumExpectedWords,
-			observedWordCount: native.status === 'ok' ? native.wordCount : 0,
-			passed: native.status === 'ok' && native.wordCount >= corpusManifest.minimumExpectedWords
-		};
+		const whisper = await measureNative(
+			decoded,
+			SHERPA_WHISPER_MODEL_ID,
+			new SherpaWhisperTranscriptionExecutor()
+		);
+		const parakeet = await measureNative(
+			decoded,
+			SHERPA_PARAKEET_MODEL_ID,
+			new SherpaParakeetTranscriptionExecutor()
+		);
 		const evidence = {
-			schemaVersion: 1,
+			schemaVersion: 2,
 			benchmark: 'speachy.native-transcription.longform',
 			corpus: corpusManifest,
 			input: {
@@ -150,14 +203,23 @@ describe.runIf(RUN_LONGFORM)('native transcription long-form benchmark', () => {
 				logicalCpuCount: cpus().length,
 				totalMemoryBytes: totalmem()
 			},
-			model: {
-				id: SHERPA_WHISPER_MODEL_ID,
-				encoder: { fileName: basename(modelPaths.encoder), sha256: encoder },
-				decoder: { fileName: basename(modelPaths.decoder), sha256: decoder },
-				tokens: { fileName: basename(modelPaths.tokens), sha256: tokens }
+			models: {
+				whisper: {
+					id: SHERPA_WHISPER_MODEL_ID,
+					encoder: whisperModel[0],
+					decoder: whisperModel[1],
+					tokens: whisperModel[2]
+				},
+				parakeet: {
+					id: SHERPA_PARAKEET_MODEL_ID,
+					encoder: parakeetModel[0],
+					decoder: parakeetModel[1],
+					joiner: parakeetModel[2],
+					tokens: parakeetModel[3]
+				}
 			},
-			native,
-			coverage
+			results: { whisper, parakeet },
+			coverage: { whisper: coverage(whisper), parakeet: coverage(parakeet) }
 		};
 
 		const outputPath = resolve(process.env.SPEACHY_LONGFORM_OUTPUT ?? DEFAULT_OUTPUT);
@@ -165,10 +227,13 @@ describe.runIf(RUN_LONGFORM)('native transcription long-form benchmark', () => {
 		await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
 		console.info('SPEACHY_LONGFORM_TRANSCRIPTION_BENCHMARK', outputPath);
 
-		expect(native.status, native.status === 'error' ? native.error : undefined).toBe('ok');
-		expect(
-			coverage.passed,
-			`Transcript contained ${coverage.observedWordCount} words; expected at least ${coverage.minimumExpectedWords} to demonstrate long-form coverage`
-		).toBe(true);
-	}, 1_900_000);
+		for (const [name, result] of Object.entries(evidence.results)) {
+			expect(result.status, result.status === 'error' ? result.error : undefined).toBe('ok');
+			const resultCoverage = evidence.coverage[name as keyof typeof evidence.coverage];
+			expect(
+				resultCoverage.passed,
+				`${name} contained ${resultCoverage.observedWordCount} words; expected at least ${resultCoverage.minimumExpectedWords}`
+			).toBe(true);
+		}
+	}, 3_700_000);
 });

@@ -2,6 +2,12 @@ import type { CachedRepoInfo } from '@huggingface/hub';
 import type { Model, ModelTask, Voice } from '$lib/types/api';
 import { loadConfig, type Config } from './config.ts';
 import {
+	hasSherpaParakeetModel,
+	resolveSherpaParakeetModelPaths,
+	SHERPA_PARAKEET_MODEL_ID,
+	sherpaParakeetCreatedAt
+} from './native-parakeet.ts';
+import {
 	hasSherpaWhisperModel,
 	resolveSherpaWhisperModelPaths,
 	SHERPA_WHISPER_MODEL_ID,
@@ -266,6 +272,17 @@ export async function listLocalModels(cacheDir?: string): Promise<CatalogModel[]
 			models.push({
 				id: SHERPA_WHISPER_MODEL_ID,
 				created: await sherpaWhisperCreatedAt(nativeWhisper),
+				object: 'model',
+				owned_by: 'sherpa-onnx',
+				language: ['en'],
+				task: 'automatic-speech-recognition'
+			});
+		}
+		const nativeParakeet = resolveSherpaParakeetModelPaths();
+		if (hasSherpaParakeetModel(nativeParakeet)) {
+			models.push({
+				id: SHERPA_PARAKEET_MODEL_ID,
+				created: await sherpaParakeetCreatedAt(nativeParakeet),
 				object: 'model',
 				owned_by: 'sherpa-onnx',
 				language: ['en'],

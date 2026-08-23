@@ -27,6 +27,12 @@ const methods = {
 		await sleep(payload?.ms ?? 50, signal);
 		return 'finished';
 	},
+	barrier: async (payload, { signal }) => {
+		const state = new Int32Array(payload.buffer);
+		Atomics.add(state, 0, 1);
+		while (Atomics.load(state, 1) === 0) await sleep(5, signal);
+		return 'released';
+	},
 	count: async (payload, { emit }) => {
 		for (let index = 0; index < (payload?.n ?? 3); index += 1) emit(index);
 		return 'done';

@@ -1,5 +1,6 @@
 import { endianness } from 'node:os';
 import { transcriptionStreamEventSchema, verboseTranscriptionSchema } from '$lib/types/api';
+import { SHERPA_PARAKEET_MODEL_ID } from '../native-parakeet.ts';
 import { SHERPA_WHISPER_MODEL_ID } from '../native-whisper.ts';
 import {
 	listLocalModelsByTask,
@@ -34,7 +35,7 @@ type TranscriptionCatalog = {
 const catalog: TranscriptionCatalog = {
 	listLocal: async () =>
 		(await listLocalModelsByTask('automatic-speech-recognition')).filter(
-			(model) => model.id !== SHERPA_WHISPER_MODEL_ID
+			(model) => model.id !== SHERPA_WHISPER_MODEL_ID && model.id !== SHERPA_PARAKEET_MODEL_ID
 		),
 	listRemote: () => listRemoteCatalogModelsByTask('automatic-speech-recognition')
 };

@@ -15,18 +15,26 @@ function executor(name: string): TranscriptionExecutor {
 }
 
 describe('transcription executor composition', () => {
-	const native = executor('native');
+	const whisper = executor('whisper');
+	const parakeet = executor('parakeet');
 	const python = executor('python');
 
 	it('keeps native ahead of the Python fallback in hybrid mode', () => {
-		expect(composeTranscriptionExecutors('hybrid', native, python)).toEqual([native, python]);
+		expect(composeTranscriptionExecutors('hybrid', [whisper, parakeet], python)).toEqual([
+			whisper,
+			parakeet,
+			python
+		]);
 	});
 
 	it('makes native-only operation structurally unable to select Python', () => {
-		expect(composeTranscriptionExecutors('native', native, python)).toEqual([native]);
+		expect(composeTranscriptionExecutors('native', [whisper, parakeet], python)).toEqual([
+			whisper,
+			parakeet
+		]);
 	});
 
 	it('retains an explicit Python baseline mode', () => {
-		expect(composeTranscriptionExecutors('python', native, python)).toEqual([python]);
+		expect(composeTranscriptionExecutors('python', [whisper, parakeet], python)).toEqual([python]);
 	});
 });

@@ -94,10 +94,18 @@ describe('WorkerPool', () => {
 
 	it('runs concurrently up to the pool size', async () => {
 		const created = createPool(3);
-		const started = performance.now();
-		await Promise.all(Array.from({ length: 3 }, () => created.call('slow', { ms: 150 })));
-		// Serial execution would take at least 450ms.
-		expect(performance.now() - started).toBeLessThan(400);
+		const buffer = new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT);
+		const state = new Int32Array(buffer);
+		const calls = Array.from({ length: 3 }, () => created.call('barrier', { buffer }));
+		try {
+			// A serial implementation can put only one call at the barrier. Reaching
+			// three proves the configured workers are active at the same time without
+			// relying on wall-clock timing under parallel test load.
+			await expect.poll(() => Atomics.load(state, 0), { timeout: 2_000 }).toBe(3);
+		} finally {
+			Atomics.store(state, 1, 1);
+		}
+		await expect(Promise.all(calls)).resolves.toEqual(['released', 'released', 'released']);
 	});
 
 	it('rejects the in-flight job when a worker dies', async () => {

@@ -1,29 +1,47 @@
 const { parentPort, workerData } = require('node:worker_threads');
-const { join } = require('node:path');
 const sherpaOnnx = require(workerData.modulePath);
 
 if (parentPort === null) throw new Error('Sherpa transcription must run in a worker thread');
 
-const directory = workerData.modelDirectory;
 const numThreads = workerData.numThreads;
+const model = workerData.model;
 const inFlight = new Map();
 let recognizer;
 
 function getRecognizer() {
-	recognizer ??= sherpaOnnx.OfflineRecognizer.createAsync({
-		featConfig: { sampleRate: 16_000, featureDim: 80 },
-		modelConfig: {
+	let modelConfig;
+	if (model.kind === 'whisper') {
+		modelConfig = {
 			whisper: {
-				encoder: join(directory, 'tiny.en-encoder.int8.onnx'),
-				decoder: join(directory, 'tiny.en-decoder.int8.onnx'),
-				language: 'en',
+				encoder: model.encoder,
+				decoder: model.decoder,
+				language: model.language,
 				task: 'transcribe'
 			},
-			tokens: join(directory, 'tiny.en-tokens.txt'),
+			tokens: model.tokens,
 			numThreads,
 			provider: 'cpu',
 			debug: 0
-		}
+		};
+	} else if (model.kind === 'nemo_transducer') {
+		modelConfig = {
+			transducer: {
+				encoder: model.encoder,
+				decoder: model.decoder,
+				joiner: model.joiner
+			},
+			tokens: model.tokens,
+			numThreads,
+			provider: 'cpu',
+			debug: 0,
+			modelType: 'nemo_transducer'
+		};
+	} else {
+		throw new Error(`Unsupported sherpa transcription model kind: ${model.kind}`);
+	}
+	recognizer ??= sherpaOnnx.OfflineRecognizer.createAsync({
+		featConfig: { sampleRate: 16_000, featureDim: 80 },
+		modelConfig
 	});
 	return recognizer;
 }

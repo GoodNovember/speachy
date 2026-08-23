@@ -101,7 +101,13 @@ export class SherpaWhisperTranscriptionExecutor implements TranscriptionExecutor
 				eval: true,
 				size: options.workerCount ?? 1,
 				workerData: {
-					modelDirectory: this.#paths.directory,
+					model: {
+						kind: 'whisper',
+						encoder: this.#paths.encoder,
+						decoder: this.#paths.decoder,
+						tokens: this.#paths.tokens,
+						language: 'en'
+					},
 					numThreads: options.modelThreads ?? 2,
 					modulePath: createRequire(import.meta.url).resolve('sherpa-onnx-node')
 				},

@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createTranscriptionResponse } from '../../src/lib/server/transcription-http.ts';
+import { SHERPA_PARAKEET_MODEL_ID } from '../../src/lib/server/native-parakeet.ts';
 import { SHERPA_WHISPER_MODEL_ID } from '../../src/lib/server/native-whisper.ts';
+import { SherpaParakeetTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-parakeet-transcription.ts';
 import { SherpaWhisperTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-transcription.ts';
 
 const AUDIO_PATH = fileURLToPath(new URL('../../../audio.wav', import.meta.url));
@@ -11,7 +13,7 @@ const RUN_INTEGRATION =
 	process.env.SPEACHY_RUN_NATIVE_TRANSCRIPTION_INTEGRATION === '1' && existsSync(AUDIO_PATH);
 
 describe.runIf(RUN_INTEGRATION)('native transcription integration', () => {
-	it('serves a real transcription through the HTTP boundary without Python', async () => {
+	it('serves a real Whisper transcription through the HTTP boundary without Python', async () => {
 		const bytes = await readFile(AUDIO_PATH);
 		const body = new ArrayBuffer(bytes.byteLength);
 		new Uint8Array(body).set(bytes);
@@ -29,4 +31,32 @@ describe.runIf(RUN_INTEGRATION)('native transcription integration', () => {
 			await executor.close();
 		}
 	}, 35_000);
+
+	it('serves a real Parakeet transcription through the HTTP boundary without Python', async () => {
+		const bytes = await readFile(AUDIO_PATH);
+		const body = new ArrayBuffer(bytes.byteLength);
+		new Uint8Array(body).set(bytes);
+		const form = new FormData();
+		form.set('file', new Blob([body], { type: 'audio/wav' }), 'audio.wav');
+		form.set('model', SHERPA_PARAKEET_MODEL_ID);
+		form.set('response_format', 'verbose_json');
+		form.append('timestamp_granularities[]', 'segment');
+		form.append('timestamp_granularities[]', 'word');
+		const executor = new SherpaParakeetTranscriptionExecutor();
+		try {
+			const response = await createTranscriptionResponse(form, AbortSignal.timeout(60_000), [
+				executor
+			]);
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as {
+				text: string;
+				words: { word: string; start: number; end: number }[];
+			};
+			expect(result.text).toMatch(/hello[,.]? world/i);
+			expect(result.words.length).toBeGreaterThanOrEqual(2);
+			expect(result.words.every((word) => word.start <= word.end)).toBe(true);
+		} finally {
+			await executor.close();
+		}
+	}, 65_000);
 });

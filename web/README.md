@@ -55,6 +55,17 @@ tar -xf models/sherpa-onnx-whisper-tiny.en.tar.bz2 -C models
 
 Set `SPEACHY_SHERPA_WHISPER_MODEL_DIR` to use another location. The real native endpoint check is gated by `SPEACHY_RUN_NATIVE_TRANSCRIPTION_INTEGRATION=1`; the opt-in Python/native cold-and-warm comparison is gated by `SPEACHY_RUN_NATIVE_TRANSCRIPTION_BENCHMARK=1`.
 
+The second native transcription model is the English-only Parakeet TDT v2 INT8 conversion, exposed as `sherpa-onnx/parakeet-tdt-0.6b-v2-int8`. It is distinct from the older `istupakov/parakeet-tdt` Hugging Face layout already understood by the Python-side catalog. Provision the official sherpa artifact under `web/models/`:
+
+```sh
+curl -L https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2 -o models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2
+tar -xf models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2 -C models
+```
+
+The validated archive SHA-256 is `157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad`. The conversion derives from NVIDIA's `parakeet-tdt-0.6b-v2`, licensed CC BY 4.0. Set `SPEACHY_SHERPA_PARAKEET_MODEL_DIR` to use another location. Native model directories and benchmark output are local-only and ignored by Git.
+
+The opt-in long-form comparison uses the checked-in LibriVox provenance manifest but reads audio from `SPEACHY_LONGFORM_CORPUS`. Enable `SPEACHY_RUN_LONGFORM_TRANSCRIPTION_BENCHMARK=1` and run `npm run test:benchmark:longform`; versioned evidence is written under ignored `web/test-results/`.
+
 ## ffmpeg
 
 MP3, Opus, FLAC, and AAC encoding requires an ffmpeg executable. Install ffmpeg through the host operating system or container image and keep it on `PATH`; Linux and macOS therefore use the normal `ffmpeg` command without any platform-specific path. Set `FFMPEG_PATH` when the binary lives elsewhere.

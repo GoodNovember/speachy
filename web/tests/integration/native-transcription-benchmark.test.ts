@@ -5,9 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { decodeAudioUpload } from '../../src/lib/server/audio-decode.ts';
+import { SHERPA_PARAKEET_MODEL_ID } from '../../src/lib/server/native-parakeet.ts';
 import { SHERPA_WHISPER_MODEL_ID } from '../../src/lib/server/native-whisper.ts';
 import { PythonTranscriptionExecutor } from '../../src/lib/server/executors/python-transcription.ts';
 import { PythonWorkerClient } from '../../src/lib/server/executors/python-worker.ts';
+import { SherpaParakeetTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-parakeet-transcription.ts';
 import { SherpaWhisperTranscriptionExecutor } from '../../src/lib/server/executors/sherpa-transcription.ts';
 import type {
 	TranscriptionExecutor,
@@ -86,7 +88,8 @@ describe.runIf(RUN_BENCHMARK)('native transcription benchmark', () => {
 			name: 'native-transcription-benchmark-python'
 		});
 		const python = new PythonTranscriptionExecutor(pythonWorker);
-		const native = new SherpaWhisperTranscriptionExecutor();
+		const whisper = new SherpaWhisperTranscriptionExecutor();
+		const parakeet = new SherpaParakeetTranscriptionExecutor();
 		try {
 			await pythonWorker.ping();
 			const evidence = {
@@ -95,16 +98,21 @@ describe.runIf(RUN_BENCHMARK)('native transcription benchmark', () => {
 					cold: await measure(python, request(PYTHON_MODEL_ID, decoded)),
 					warm: await measure(python, request(PYTHON_MODEL_ID, decoded))
 				},
-				native: {
-					cold: await measure(native, request(SHERPA_WHISPER_MODEL_ID, decoded)),
-					warm: await measure(native, request(SHERPA_WHISPER_MODEL_ID, decoded))
+				whisper: {
+					cold: await measure(whisper, request(SHERPA_WHISPER_MODEL_ID, decoded)),
+					warm: await measure(whisper, request(SHERPA_WHISPER_MODEL_ID, decoded))
+				},
+				parakeet: {
+					cold: await measure(parakeet, request(SHERPA_PARAKEET_MODEL_ID, decoded)),
+					warm: await measure(parakeet, request(SHERPA_PARAKEET_MODEL_ID, decoded))
 				}
 			};
 			console.info('SPEACHY_NATIVE_TRANSCRIPTION_BENCHMARK', JSON.stringify(evidence));
 			expect(evidence.python.warm.text.trim()).not.toBe('');
-			expect(evidence.native.warm.text.trim()).not.toBe('');
+			expect(evidence.whisper.warm.text.trim()).not.toBe('');
+			expect(evidence.parakeet.warm.text.trim()).not.toBe('');
 		} finally {
-			await Promise.all([pythonWorker.close(), native.close()]);
+			await Promise.all([pythonWorker.close(), whisper.close(), parakeet.close()]);
 		}
 	}, 190_000);
 });

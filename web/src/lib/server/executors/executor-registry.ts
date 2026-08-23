@@ -5,6 +5,7 @@ import { PythonDiarizationExecutor } from './python-diarization.ts';
 import { PythonSpeakerEmbeddingExecutor } from './python-speaker-embedding.ts';
 import { PythonSpeechExecutor } from './python-speech.ts';
 import { PythonTranscriptionExecutor } from './python-transcription.ts';
+import { SherpaParakeetTranscriptionExecutor } from './sherpa-parakeet-transcription.ts';
 import { SherpaWhisperTranscriptionExecutor } from './sherpa-transcription.ts';
 import { SileroVadExecutor } from './silero-vad.ts';
 import type { PythonWorkerRequestOptions } from './python-worker.ts';
@@ -18,7 +19,8 @@ import type {
 } from './types.ts';
 
 const nativeVadExecutor = new SileroVadExecutor();
-let nativeTranscriptionExecutor: SherpaWhisperTranscriptionExecutor | undefined;
+let nativeWhisperExecutor: SherpaWhisperTranscriptionExecutor | undefined;
+let nativeParakeetExecutor: SherpaParakeetTranscriptionExecutor | undefined;
 
 const lazyPythonWorker = {
 	async request(
@@ -44,21 +46,24 @@ function config(): Config {
 	return hasRuntime() ? getConfig() : loadConfig(process.env);
 }
 
-function nativeTranscription(): SherpaWhisperTranscriptionExecutor {
-	nativeTranscriptionExecutor ??= new SherpaWhisperTranscriptionExecutor({
+function nativeTranscriptions(): readonly TranscriptionExecutor[] {
+	nativeWhisperExecutor ??= new SherpaWhisperTranscriptionExecutor({
 		workerCount: config().inferenceWorkers
 	});
-	return nativeTranscriptionExecutor;
+	nativeParakeetExecutor ??= new SherpaParakeetTranscriptionExecutor({
+		workerCount: config().inferenceWorkers
+	});
+	return [nativeWhisperExecutor, nativeParakeetExecutor];
 }
 
 export function composeTranscriptionExecutors(
 	backend: Config['inferenceBackend'],
-	nativeExecutor: TranscriptionExecutor,
+	nativeExecutors: readonly TranscriptionExecutor[],
 	pythonExecutor: TranscriptionExecutor
 ): readonly TranscriptionExecutor[] {
-	if (backend === 'native') return [nativeExecutor];
+	if (backend === 'native') return nativeExecutors;
 	if (backend === 'python') return [pythonExecutor];
-	return [nativeExecutor, pythonExecutor];
+	return [...nativeExecutors, pythonExecutor];
 }
 
 // This is the composition boundary for native routes. Route files depend only
@@ -77,7 +82,7 @@ export function getDiarizationExecutors(): readonly DiarizationExecutor[] {
 export function getTranscriptionExecutors(): readonly TranscriptionExecutor[] {
 	return composeTranscriptionExecutors(
 		config().inferenceBackend,
-		nativeTranscription(),
+		nativeTranscriptions(),
 		new PythonTranscriptionExecutor(lazyPythonWorker)
 	);
 }

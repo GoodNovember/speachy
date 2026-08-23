@@ -243,6 +243,7 @@ One executor at a time, easiest and most verifiable first.
   - The initial fixture is Chapter 1 of LibriVox's public-domain _Dracula_ Version 3 recording. From `web`, set `SPEACHY_LONGFORM_CORPUS` to the directory containing `dracula_01_stoker_64kb.mp3`, enable the gate, and run `npm run test:benchmark:longform`.
   - The first run exposed sherpa Whisper's hard 30-second input limit: an oversized call returned only 51 opening words while reporting success. The native executor now splits every speech range into 29-second windows before inference, so an oversized buffer cannot be silently discarded.
   - First complete Chapter 1 evidence on the same Windows CPU: 2020.76 seconds of audio produced 5781 words across 70 windows in 359154 ms (RTF 0.178, about 5.6x real time), with an 816 MiB peak Node RSS. This proves long-form coverage and throughput, not transcript quality; word timestamps remain unavailable.
+  - The controlled Whisper/Parakeet run held the same 29-second windows and two model threads. Parakeet v2 INT8 completed in 294365 ms (RTF 0.146) versus Whisper tiny.en's 333058 ms (RTF 0.165), about 11.6% faster, while using 1342 MiB peak RSS versus 820 MiB. Parakeet returned 5769 monotonic token-derived word spans; Whisper still returned none. The Parakeet transcript is visibly cleaner, but WER remains unmeasured.
 - [x] Record the first Windows CPU smoke evidence on the 1.3235-second checked-in WAV: faster-whisper/CTranslate2 INT8 was 8356 ms cold and 1045 ms warm (RTF 6.31 / 0.79), while sherpa Whisper ONNX INT8 was 1167 ms cold and 193 ms warm (RTF 0.88 / 0.15). Both produced the expected phrase; this fixture is proof of viability, not a quality verdict
 - [ ] Expand the Whisper comparison from the short smoke fixture to a representative corpus before resolving the quality/performance gate; record real-time factor, memory, transcript quality, and timestamp quality
 
@@ -251,7 +252,7 @@ One executor at a time, easiest and most verifiable first.
 - [ ] WeSpeaker speaker embedding on `sherpa-onnx`
 - [ ] Benchmark ONNX Runtime Whisper against the CTranslate2 baseline; record the numbers here before deciding
 - [ ] Whisper STT on `sherpa-onnx`, gated on that benchmark
-- [ ] Parakeet STT on `sherpa-onnx`
+- [x] Parakeet TDT v2 INT8 STT on `sherpa-onnx`, with a distinct model identity, worker-isolated transducer executor, native-only HTTP proof, token-derived word timestamps, and controlled short/long comparison evidence
 - [ ] Pyannote diarization — port or consciously leave in Python
 - [ ] GPU path: ONNX Runtime CUDA from Node, verified in Docker
 - [ ] Rewrite the `Dockerfile` and compose files for a Node runtime
